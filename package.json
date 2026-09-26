@@ -4,9 +4,9 @@
   "description": "AI agent marketplace on Stellar, built on the Trellis design system",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "node init && next dev",
+    "build": "node init && next build",
+    "start": "node init && next start",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "typecheck": "tsc --noEmit",
     "test": "jest --config jest.config.cjs",
@@ -17,7 +17,7 @@
     "telemetry:ws": "node scripts/telemetry-ws-server.mjs",
     "analyze": "source-map-explorer .next/static/**/*.js",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "node init && storybook build"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",
