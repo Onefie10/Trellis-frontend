@@ -1,5 +1,6 @@
 import { MultiAssetStakingEngine } from "@/lib/staking/engine";
 import { TokenInterface } from "@/lib/staking/types";
+import AutoCompoundPanel from "@/components/staking/AutoCompoundPanel";
 
 const rewardToken: TokenInterface = {
   contractId: "REWARD",
@@ -32,6 +33,7 @@ const engine = new MultiAssetStakingEngine({
       rewardWeight: 2,
       stakeMultiplier: 1,
       minStake: 10,
+      unbondingPeriodMs: 7 * 24 * 60 * 60 * 1000,
     },
     {
       id: "usdc",
@@ -39,16 +41,19 @@ const engine = new MultiAssetStakingEngine({
       rewardWeight: 1,
       stakeMultiplier: 1.5,
       minStake: 5,
+      unbondingPeriodMs: 14 * 24 * 60 * 60 * 1000,
     },
   ],
 });
 
 engine.stake("alice", "xlm", 100, 0);
 engine.stake("bob", "usdc", 50, 0);
+engine.unstake("alice", "xlm", 20, 0);
 
 const supportedAssets = engine.getSupportedAssets().map((asset) => ({
   ...asset,
   emissionPerSecond: engine.getAssetEmissionRate(asset.id),
+  apy: engine.getAPY(asset.id),
 }));
 
 const previewAtTenSeconds = [
@@ -72,7 +77,17 @@ const poolData = supportedAssets.map((asset) => ({
   rewardWeight: asset.rewardWeight,
   multiplier: asset.stakeMultiplier ?? 1,
   emissionPerSecond: asset.emissionPerSecond,
+  apy: asset.apy,
 }));
+
+const alicePortfolio = engine.getPortfolio("alice");
+const unbondingQueue = alicePortfolio.positions.flatMap(p => 
+  p.unbondingRequests.map(r => ({
+    assetId: p.assetId,
+    amount: r.amount,
+    unlockTime: r.unlockTime
+  }))
+);
 
 export default function StakingPage() {
   return (
@@ -123,15 +138,14 @@ export default function StakingPage() {
         </div>
 
         <section className="space-y-4">
-          <h2 className="text-2xl font-bold text-white">Supported assets</h2>
+          <h2 className="text-2xl font-bold text-white">Supported assets & APY</h2>
           <div className="overflow-hidden rounded-2xl border border-trellis-vine/20 bg-trellis-ground/40">
             <table className="w-full text-left">
               <thead className="bg-trellis-ground/60 text-xs uppercase tracking-[0.2em] text-gray-400">
                 <tr>
                   <th className="px-4 py-3">Asset</th>
                   <th className="px-4 py-3">Token</th>
-                  <th className="px-4 py-3">Reward Weight</th>
-                  <th className="px-4 py-3">Stake Multiplier</th>
+                  <th className="px-4 py-3">APY</th>
                   <th className="px-4 py-3">Emission / sec</th>
                   <th className="px-4 py-3">Minimum</th>
                 </tr>
@@ -141,8 +155,7 @@ export default function StakingPage() {
                   <tr key={asset.id} className="border-t border-trellis-vine/10">
                     <td className="px-4 py-3 font-semibold text-white">{asset.id}</td>
                     <td className="px-4 py-3 text-gray-300">{asset.token.symbol}</td>
-                    <td className="px-4 py-3 text-gray-300">{asset.rewardWeight}</td>
-                    <td className="px-4 py-3 text-gray-300">{asset.stakeMultiplier ?? 1}x</td>
+                    <td className="px-4 py-3 text-trellis-vine font-bold">{(asset.apy / 1000000).toFixed(2)}M %</td>
                     <td className="px-4 py-3 text-gray-300">{asset.emissionPerSecond}</td>
                     <td className="px-4 py-3 text-gray-300">
                       {asset.minStake ?? 0} {asset.token.symbol}
@@ -152,6 +165,36 @@ export default function StakingPage() {
               </tbody>
             </table>
           </div>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-2xl font-bold text-white">Unbonding Queue (Alice)</h2>
+          {unbondingQueue.length === 0 ? (
+            <p className="text-gray-400">No pending unbonding requests.</p>
+          ) : (
+            <div className="overflow-hidden rounded-2xl border border-trellis-vine/20 bg-trellis-ground/40">
+              <table className="w-full text-left">
+                <thead className="bg-trellis-ground/60 text-xs uppercase tracking-[0.2em] text-gray-400">
+                  <tr>
+                    <th className="px-4 py-3">Asset</th>
+                    <th className="px-4 py-3">Amount</th>
+                    <th className="px-4 py-3">Unlock Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {unbondingQueue.map((req, i) => (
+                    <tr key={i} className="border-t border-trellis-vine/10">
+                      <td className="px-4 py-3 font-semibold text-white uppercase">{req.assetId}</td>
+                      <td className="px-4 py-3 text-gray-300">{req.amount}</td>
+                      <td className="px-4 py-3 text-gray-300">
+                        {new Date(req.unlockTime).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
 
         <section className="grid gap-6 lg:grid-cols-2">
@@ -209,6 +252,7 @@ export default function StakingPage() {
             </div>
           </div>
         </section>
+        <AutoCompoundPanel />
       </section>
     </main>
   );

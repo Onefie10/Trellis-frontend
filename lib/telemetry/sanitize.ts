@@ -48,10 +48,18 @@ export function sanitizePayload(
   return Object.keys(out).length ? out : undefined;
 }
 
-/** Apply client-side defense-in-depth before rendering. */
+import { reviewAndMinimizeMetadata } from './minimizationReview';
+
+/** Apply client-side defense-in-depth and operational metadata minimization before rendering. */
 export function sanitizeTelemetryEvent(event: TelemetryEvent): TelemetryEvent {
-  return {
+  const sanitized = {
     ...event,
     payload: sanitizePayload(event.payload),
+  };
+  const reviewed = reviewAndMinimizeMetadata(sanitized);
+  return {
+    ...reviewed.event,
+    classification: reviewed.classification,
+    expiresAt: reviewed.expiresAt,
   };
 }

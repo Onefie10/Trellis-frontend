@@ -36,6 +36,12 @@ export interface LifecycleNotification {
   dismissed: boolean;
   createdAt: string;
   metadata?: Record<string, any>;
+  /** Whether this alert is mandatory (bypasses optional mutes and quiet hours). */
+  isMandatory?: boolean;
+  /** Routing outcome determined by the mandatory routing engine. */
+  routingDecision?: 'delivered' | 'suppressed' | 'mandatory_delivered';
+  /** Suppression reasons if optional notification was silenced. */
+  suppressionReasons?: string[];
 }
 
 export interface NotificationFilterOptions {
@@ -43,4 +49,6 @@ export interface NotificationFilterOptions {
   severity?: NotificationSeverity;
   type?: LifecycleEventType;
   limit?: number;
+  /** If set to true, only returns mandatory alerts. */
+  mandatoryOnly?: boolean;
 }

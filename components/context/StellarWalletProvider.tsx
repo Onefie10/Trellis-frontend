@@ -16,6 +16,7 @@ import {
   isValidStellarAddress,
 } from '@/lib/stellar';
 import { STORAGE_KEYS, DEFAULT_NETWORK, STELLAR_NETWORKS, ERROR_MESSAGES } from '@/lib/stellar-constants';
+import { getSorobanRpcPoolManager } from '@/lib/soroban/client';
 import { LinkedWallet, Delegation } from '@/lib/wallet/types';
 import { walletService } from '@/lib/wallet/service';
 
@@ -26,6 +27,12 @@ export function StellarWalletProvider({ children }: { children: React.ReactNode 
   const [network, setNetwork] = useState<StellarNetwork>(DEFAULT_NETWORK);
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rpcStatus, setRpcStatus] = useState({
+    status: 'connected' as const,
+    activeNode: null,
+    fallbackNodes: 0,
+    latencyMs: 0,
+  });
   const [linkedWallets, setLinkedWallets] = useState<LinkedWallet[]>([]);
   const [delegations, setDelegations] = useState<Delegation[]>([]);
 
@@ -58,6 +65,20 @@ export function StellarWalletProvider({ children }: { children: React.ReactNode 
   // Persist network to localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.NETWORK, network);
+  }, [network]);
+
+  useEffect(() => {
+    const pool = getSorobanRpcPoolManager(network);
+    const syncRpcStatus = () => setRpcStatus(pool.getStatus());
+
+    syncRpcStatus();
+
+    const interval = window.setInterval(() => {
+      pool.refreshNodeHealth().catch(() => undefined);
+      syncRpcStatus();
+    }, 30000);
+
+    return () => window.clearInterval(interval);
   }, [network]);
 
   const connectWallet = useCallback(
@@ -253,6 +274,7 @@ export function StellarWalletProvider({ children }: { children: React.ReactNode 
     network,
     isConnecting,
     error,
+    rpcStatus,
     connectWallet,
     disconnectWallet,
     switchNetwork,

@@ -90,6 +90,41 @@ export async function getVotingPowerForAccount(
   return parseFloat(balance.balance);
 }
 
+export async function getVotingWeightForAccount(
+  accountId: string,
+  config: GovernanceConfig,
+  options: { requireSybilVerification?: boolean } = {}
+): Promise<{
+  tokenBalance: number;
+  linearVotingPower: number;
+  quadraticVotingPower: number;
+  isSybilVerified: boolean;
+  sybilReasons: string[];
+}> {
+  const tokenBalance = await getVotingPowerForAccount(accountId, config);
+  const { verifyStellarAccountSybilResistance } = await import('./sybil-resistance');
+  const { calculateQuadraticVotingWeight } = await import('./quadratic-voting');
+
+  const sybilCheck = await verifyStellarAccountSybilResistance(accountId, config.network, {
+    minAccountAgeDays: config.minAccountAgeDays,
+    minTransactionCount: config.minTransactionCount,
+  });
+
+  const isSybilVerified = sybilCheck.isVerified;
+  const quadraticVotingPower =
+    options.requireSybilVerification && !isSybilVerified
+      ? 0
+      : calculateQuadraticVotingWeight(tokenBalance);
+
+  return {
+    tokenBalance,
+    linearVotingPower: tokenBalance,
+    quadraticVotingPower,
+    isSybilVerified,
+    sybilReasons: sybilCheck.reasons,
+  };
+}
+
 export async function getTotalVotingPower(
   votingAccounts: string[],
   config: GovernanceConfig
@@ -255,6 +290,27 @@ export function isProposalApproved(
   totalVotingPower: number,
   config: GovernanceConfig
 ): boolean {
+  if (config.useQuadraticVoting) {
+    const quadApprovals =
+      proposal.quadraticApprovals ??
+      (proposal.approvals > 0 ? Math.sqrt(proposal.approvals) : 0);
+    const quadRejections =
+      proposal.quadraticRejections ??
+      (proposal.rejections > 0 ? Math.sqrt(proposal.rejections) : 0);
+    const quadAbstentions =
+      proposal.quadraticAbstentions ??
+      (proposal.abstentions > 0 ? Math.sqrt(proposal.abstentions) : 0);
+
+    const participated = quadApprovals + quadRejections + quadAbstentions;
+    const quadTotal =
+      proposal.totalQuadraticVotingPowerAtCreation ??
+      (totalVotingPower > 0 ? Math.sqrt(totalVotingPower) : 0);
+
+    const quorumReached = participated >= quadTotal * config.minQuorumRatio;
+    const approvalRatio = participated === 0 ? 0 : quadApprovals / participated;
+    return quorumReached && approvalRatio >= config.requiredApprovalRatio;
+  }
+
   const participated = proposal.approvals + proposal.rejections + proposal.abstentions;
   const quorumReached = participated >= totalVotingPower * config.minQuorumRatio;
   const approvalRatio =
@@ -266,6 +322,28 @@ export function getDelegationFromSigner(
   signer: StellarSdk.xdr.Signer
 ): Delegation | null {
   if (!signer.key()?.switch()?.name || !signer.weight()) return null;
-  return null;
+  return null; // Mock implementation
 }
 
+export function isTimelockExpired(proposal: Proposal): boolean {
+  if (!proposal.executionEta) return false;
+  return Date.now() >= new Date(proposal.executionEta).getTime();
+}
+
+export function calculateDelegatedVotingPower(
+  accountId: string,
+  delegations: Delegation[],
+  accountBalances: Record<string, number>
+): number {
+  let power = accountBalances[accountId] || 0;
+  
+  // Add power from accounts that delegated to this account
+  for (const del of delegations) {
+    if (del.delegate === accountId) {
+      power += accountBalances[del.delegator] || 0;
+    }
+  }
+  return power;
+}
+
+export * from './multisig';

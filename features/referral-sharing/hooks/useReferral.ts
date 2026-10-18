@@ -1,7 +1,15 @@
 import { useState, useEffect } from 'react';
 import { ReferralService } from '../services/referralService';
-import { AnalyticsService } from '../services/analyticsService';
-import { ReferralLink, ReferralStats, ReferralReward } from '../types';
+import {
+  AnalyticsService,
+  type RecordClickEventInput,
+} from '../services/analyticsService';
+import {
+  ReferralLink,
+  ReferralStats,
+  ReferralReward,
+  ReferralClickMetrics,
+} from '../types';
 
 export const useReferral = (userId: string) => {
   const [stats, setStats] = useState<ReferralStats | null>(null);
@@ -9,6 +17,8 @@ export const useReferral = (userId: string) => {
   const [rewards, setRewards] = useState<ReferralReward[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [clickMetrics, setClickMetrics] = useState<ReferralClickMetrics | null>(null);
+  const [vanitySlug, setVanitySlug] = useState<string | null>(null);
 
   const loadReferralData = async () => {
     if (!userId) return;
@@ -116,6 +126,49 @@ export const useReferral = (userId: string) => {
     }
   };
 
+  const registerVanitySlug = async (
+    slug: string,
+    targetAgentId: string,
+    reward?: string,
+  ) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const existingSlugs = referralLinks
+        .map((link) => link.slug)
+        .filter((value): value is string => Boolean(value));
+      const newLink = await ReferralService.registerVanitySlug({
+        userId,
+        slug,
+        targetAgentId,
+        reward,
+        existingSlugs,
+      });
+      setReferralLinks((prev) => [newLink, ...prev]);
+      setVanitySlug(newLink.slug ?? null);
+      return newLink;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to register vanity slug');
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const recordClick = async (input: RecordClickEventInput) => {
+    try {
+      const event = await AnalyticsService.recordClickEvent(input);
+      const stored = AnalyticsService.getStoredLinkEvents();
+      const events = stored.some((item) => item.id === event.id)
+        ? stored
+        : [...stored, event];
+      setClickMetrics(AnalyticsService.computeClickMetrics(events));
+    } catch (err) {
+      console.warn('Failed to record referral click:', err);
+    }
+  };
+
   useEffect(() => {
     loadReferralData();
   }, [userId]);
@@ -124,10 +177,14 @@ export const useReferral = (userId: string) => {
     stats,
     referralLinks,
     rewards,
+    clickMetrics,
+    vanitySlug,
     isLoading,
     error,
     loadReferralData,
     generateReferralLink,
+    registerVanitySlug,
+    recordClick,
     claimReward,
     updateReferralLink,
     deleteReferralLink,

@@ -1,6 +1,31 @@
 /* Service for tracking referral analytics */
 
 import { ReferralAnalytics } from '../types';
+import {
+  classifyReferrerSource,
+  computeReferralClickMetrics,
+  detectDeviceType,
+  toConversionStatus,
+  type ConversionStatus,
+  type ReferralClickMetrics,
+  type ReferralEventKind,
+  type ReferralLinkEvent,
+} from '@/lib/referral-metrics';
+
+/** In-repo affiliate backend that owns the click ledger (issue #128). */
+const LINK_EVENTS_ENDPOINT = '/api/affiliates/referral-clicks';
+const LINK_EVENTS_STORAGE_KEY = 'referral_link_events';
+const MAX_LINK_EVENTS = 500;
+
+export interface RecordClickEventInput {
+  slug: string;
+  targetAgentId?: string;
+  referralCode?: string;
+  referrer?: string | null;
+  userAgent?: string | null;
+  conversionStatus?: ConversionStatus | boolean;
+  kind?: ReferralEventKind;
+}
 
 export class AnalyticsService {
   private static baseUrl = '/analytics';
@@ -168,13 +193,8 @@ export class AnalyticsService {
 
     const userAgent = window.navigator.userAgent.toLowerCase();
     
-    // Device type detection
-    let deviceType: 'mobile' | 'tablet' | 'desktop' = 'desktop';
-    if (/mobile|android|iphone|ipod|blackberry|opera mini|iemobile/.test(userAgent)) {
-      deviceType = 'mobile';
-    } else if (/tablet|ipad|android(?!.*mobile)/.test(userAgent)) {
-      deviceType = 'tablet';
-    }
+    // Device type detection (shared with the click analytics ledger).
+    const deviceType = detectDeviceType(userAgent);
 
     // Browser detection
     let browser = 'unknown';
@@ -192,5 +212,91 @@ export class AnalyticsService {
     else if (userAgent.includes('ios') || userAgent.includes('iphone') || userAgent.includes('ipad')) os = 'ios';
 
     return { deviceType, browser, os };
+  }
+
+  // --- Referral link click analytics (issue #128) ---
+
+  /**
+   * Record a link view or click and return the stored event. Captures the
+   * three fields the affiliate dashboard needs — referrer source, device type
+   * and conversion status — and mirrors the event locally so metrics keep
+   * working offline.
+   */
+  static async recordClickEvent(input: RecordClickEventInput): Promise<ReferralLinkEvent> {
+    const event = this.buildLinkEvent(input);
+
+    try {
+      await fetch(LINK_EVENTS_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(event),
+      });
+    } catch (error) {
+      console.warn('Failed to track referral link event:', error);
+    }
+
+    this.storeLinkEventLocally(event);
+    return event;
+  }
+
+  /** Build (without sending) a fully classified link event. */
+  static buildLinkEvent(input: RecordClickEventInput): ReferralLinkEvent {
+    const referrer =
+      input.referrer !== undefined
+        ? input.referrer
+        : typeof document !== 'undefined'
+          ? document.referrer
+          : null;
+    const userAgent =
+      input.userAgent !== undefined
+        ? input.userAgent
+        : typeof window !== 'undefined'
+          ? window.navigator.userAgent
+          : null;
+
+    return {
+      id: `linkevt_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
+      kind: input.kind === 'view' ? 'view' : 'click',
+      slug: input.slug,
+      targetAgentId: input.targetAgentId,
+      referralCode: input.referralCode,
+      timestamp: new Date().toISOString(),
+      referrerSource: classifyReferrerSource(referrer),
+      deviceType: detectDeviceType(userAgent),
+      conversionStatus: toConversionStatus(input.conversionStatus),
+      referrer: referrer ?? undefined,
+      userAgent: userAgent ?? undefined,
+    };
+  }
+
+  /** Derive CTR / conversion metrics from a set of recorded events. */
+  static computeClickMetrics(events: ReferralLinkEvent[]): ReferralClickMetrics {
+    return computeReferralClickMetrics(events);
+  }
+
+  /** The locally mirrored ledger (offline fallback for the backend store). */
+  static getStoredLinkEvents(): ReferralLinkEvent[] {
+    if (typeof window === 'undefined') return [];
+    try {
+      const stored = window.localStorage.getItem(LINK_EVENTS_STORAGE_KEY);
+      return stored ? (JSON.parse(stored) as ReferralLinkEvent[]) : [];
+    } catch (error) {
+      console.warn('Failed to retrieve stored link events:', error);
+      return [];
+    }
+  }
+
+  private static storeLinkEventLocally(event: ReferralLinkEvent): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const events = this.getStoredLinkEvents();
+      events.push(event);
+      if (events.length > MAX_LINK_EVENTS) {
+        events.splice(0, events.length - MAX_LINK_EVENTS);
+      }
+      window.localStorage.setItem(LINK_EVENTS_STORAGE_KEY, JSON.stringify(events));
+    } catch (error) {
+      console.warn('Failed to store link event locally:', error);
+    }
   }
 }

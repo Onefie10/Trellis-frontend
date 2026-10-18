@@ -33,11 +33,26 @@ import WalletAddress from "./WalletAddress";
 import NetworkSwitcher from "./NetworkSwitcher";
 import ThemeToggle from "./ThemeToggle";
 import LanguageSwitcher from "./LanguageSwitcher";
+import { useStellarWallet } from "./context/StellarWalletProvider";
+import useFocusTrap from "./useFocusTrap";
 
 export const Navigation: React.FC = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const { rpcStatus } = useStellarWallet();
+
+  const rpcStatusClasses = {
+    connected: "bg-emerald-500/10 text-emerald-300 border-emerald-400/30",
+    degraded: "bg-amber-500/10 text-amber-200 border-amber-400/30",
+    offline: "bg-red-500/10 text-red-200 border-red-400/30",
+  };
+
+  const rpcStatusLabel = {
+    connected: "Connected",
+    degraded: "Degraded",
+    offline: "Offline",
+  };
 
   const navLinks = [
     { href: "/marketplace", label: "Marketplace", icon: <StoreIcon /> },
@@ -56,7 +71,13 @@ export const Navigation: React.FC = () => {
     { href: "/bug-report", label: "Report Bug", icon: <BugIcon /> },
     { href: "/bug-reports", label: "Bug Reports" },
     { href: "/submissions", label: "Submission Dashboard" },
+    { href: "/settings/api-keys", label: "API Keys" },
   ];
+
+  const drawerTrapRef = useFocusTrap<HTMLDivElement>({
+    active: isDrawerOpen,
+    onEscape: () => setIsDrawerOpen(false),
+  });
 
   const toggleDrawer = (open: boolean) => (event: React.KeyboardEvent | React.MouseEvent) => {
     if (
@@ -97,6 +118,13 @@ export const Navigation: React.FC = () => {
           {/* Right side controls */}
           <div className="flex gap-3 items-center">
             <div className="hidden md:flex gap-3 items-center">
+              <span
+                className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide ${rpcStatusClasses[rpcStatus.status]}`}
+                title={rpcStatus.warning || `RPC status: ${rpcStatus.status}`}
+              >
+                <span className="h-2 w-2 rounded-full bg-current" />
+                {rpcStatusLabel[rpcStatus.status]}
+              </span>
               <ThemeToggle />
               <LanguageSwitcher />
               <NetworkSwitcher />
@@ -138,14 +166,17 @@ export const Navigation: React.FC = () => {
         }}
       >
         <Box
+          ref={drawerTrapRef}
           sx={{ width: "auto", p: 2 }}
-          role="presentation"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navigation drawer"
           onClick={toggleDrawer(false)}
           onKeyDown={toggleDrawer(false)}
         >
           <Box className="flex justify-between items-center mb-6">
             <span className="glow-text font-bold text-lg">Navigation</span>
-            <IconButton onClick={toggleDrawer(false)} sx={{ color: "white" }}>
+            <IconButton onClick={toggleDrawer(false)} sx={{ color: "white" }} aria-label="Close navigation drawer">
               <CloseIcon />
             </IconButton>
           </Box>

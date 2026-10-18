@@ -20,14 +20,18 @@ import {
   AutoAwesome as MagicIcon
 } from '@mui/icons-material';
 
+import { isValidVersion } from '@/features/agent-versioning/lib/semver-utils';
+
 export default function CreateAgent() {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     name: '',
+    version: '',
     description: '',
     behavior: '',
     capabilities: [] as string[],
   });
+  const [versionError, setVersionError] = useState('');
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -37,6 +41,9 @@ export default function CreateAgent() {
       ...prev,
       [name]: value,
     }));
+    if (name === 'version') {
+      setVersionError('');
+    }
   };
 
   const toggleCapability = (cap: string) => {
@@ -49,6 +56,16 @@ export default function CreateAgent() {
   };
 
   const handleNext = () => {
+    if (step === 1) {
+      if (!formData.version) {
+        setVersionError('Version is required.');
+        return;
+      }
+      if (!isValidVersion(formData.version)) {
+        setVersionError('Invalid version format. Must follow SemVer (e.g., 1.0.0).');
+        return;
+      }
+    }
     if (step < 4) setStep(step + 1);
   };
 
@@ -116,6 +133,20 @@ export default function CreateAgent() {
                   onChange={handleInputChange}
                   placeholder="e.g., DataAnalyzer Pro"
                   variant="outlined"
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
+                />
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>Initial Version</Typography>
+                <TextField
+                  fullWidth
+                  name="version"
+                  value={formData.version}
+                  onChange={handleInputChange}
+                  placeholder="e.g., 1.0.0"
+                  variant="outlined"
+                  error={!!versionError}
+                  helperText={versionError}
                   sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
                 />
               </Box>

@@ -12,11 +12,11 @@ export default function MetricSeriesTable({ series }: { series: MetricsSeries[] 
 
   return (
     <div className="overflow-x-auto rounded-lg border border-trellis-vine/30">
-      <table className="min-w-full text-sm">
+      <table aria-label="Metric series" className="min-w-full text-sm">
         <thead className="bg-trellis-ground/60">
           <tr>
-            <th className="text-left px-4 py-3 text-gray-200 font-semibold">Series</th>
-            <th className="text-right px-4 py-3 text-gray-200 font-semibold">Latest</th>
+            <th scope="col" className="text-left px-4 py-3 text-gray-200 font-semibold">Series</th>
+            <th scope="col" className="text-right px-4 py-3 text-gray-200 font-semibold">Latest</th>
           </tr>
         </thead>
         <tbody>

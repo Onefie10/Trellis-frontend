@@ -51,6 +51,13 @@ export interface ImportOptions {
   externalIdKey?: string;
 }
 
+export interface ImportProgress {
+  processed: number;
+  total: number;
+  current_item?: string;
+  errors: number;
+}
+
 export interface DryRunSummary {
   totalRows: number;
   validRows: number;

@@ -6,6 +6,7 @@ import { checkRateLimit, createRateLimitResponse, IMPORT_RATE_LIMIT } from '@/li
 import { buildImportPreview, quarantineRows, toTraceableRows } from '@/lib/import/preview';
 import { buildRollbackGuidance } from '@/lib/import/rollback';
 import type { ImportResult } from '@/lib/import/types';
+import { csrfMiddleware } from '@/lib/security/csrf';
 
 /**
  * POST /api/import
@@ -33,6 +34,9 @@ function normalizeInput(bodyData: unknown): unknown {
 }
 
 export async function POST(request: NextRequest) {
+  const csrfError = csrfMiddleware(request);
+  if (csrfError) return csrfError;
+
   const rl = checkRateLimit(request, IMPORT_RATE_LIMIT);
   if (rl.blocked) {
     return createRateLimitResponse(rl, 'Import rate limit exceeded. Please try again later.');
@@ -161,4 +165,3 @@ function buildPreviewRollbackGuidance(quarantined: ReturnType<typeof quarantineR
     ],
   };
 }
-

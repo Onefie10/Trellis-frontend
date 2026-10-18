@@ -1,5 +1,6 @@
 import * as StellarSdk from "@stellar/stellar-sdk";
 import { SorobanContractSpec, SorobanFunctionSpec } from "../types";
+export { getSorobanInputType, parseFormValue, serializeSorobanValue, splitGenericType, validateSorobanValue } from "./values";
 
 /**
  * Utility to load and parse Soroban contract specifications

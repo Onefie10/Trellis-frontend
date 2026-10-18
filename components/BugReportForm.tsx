@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
-import { BUG_CATEGORIES, PRIORITY_LEVELS, type BugReportFormData, type RewardCalculation } from '../types/bug-report';
+import React, { useCallback, useMemo, useState } from 'react';
+import { BUG_CATEGORIES, PRIORITY_LEVELS, type BugReport, type BugReportFormData, type RewardCalculation } from '../types/bug-report';
+import { findSimilarReports } from '../lib/bug-reports-pagination';
+import { dispatchInvariantAlert, type AlertSeverity } from '../lib/invariant-monitor/report';
 import RewardCalculator from './RewardCalculator';
 import ScreenshotUpload from './ScreenshotUpload';
 import Button from './Button';
@@ -9,11 +11,40 @@ import Button from './Button';
 interface BugReportFormProps {
   onSubmit: (data: BugReportFormData) => void;
   isSubmitting?: boolean;
+  /** Existing reports used to warn the reporter about probable duplicates. */
+  existingReports?: BugReport[];
 }
+
+const FIELD_ELEMENT_IDS: Record<string, string> = {
+  title: 'bug-title',
+  description: 'bug-description',
+  stepsToReproduce: 'bug-steps',
+  expectedBehavior: 'bug-expected',
+  actualBehavior: 'bug-actual',
+  reporterEmail: 'bug-email',
+  agreeToTerms: 'agreeToTerms',
+};
+
+const PRIORITY_TO_SEVERITY: Record<string, AlertSeverity> = {
+  critical: 'critical',
+  high: 'major',
+  medium: 'minor',
+  low: 'info',
+};
+
+const SEVERITY_THRESHOLD: AlertSeverity = 'major';
+
+const SEVERITY_RANK: Record<AlertSeverity, number> = {
+  critical: 4,
+  major: 3,
+  minor: 2,
+  info: 1,
+};
 
 export const BugReportForm: React.FC<BugReportFormProps> = ({
   onSubmit,
-  isSubmitting = false
+  isSubmitting = false,
+  existingReports = []
 }) => {
   const [formData, setFormData] = useState<BugReportFormData>({
     title: '',
@@ -25,11 +56,63 @@ export const BugReportForm: React.FC<BugReportFormProps> = ({
     category: 'functionality',
     reporterEmail: '',
     screenshots: [],
-    agreeToTerms: false
+    agreeToTerms: false,
+    buildVersion: ''
   });
 
   const [reward, setReward] = useState<RewardCalculation | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const similarReports = useMemo(() => {
+    if (formData.title.trim().length < 10) return [];
+    return findSimilarReports(
+      { title: formData.title, description: formData.description },
+      existingReports,
+    );
+  }, [formData.title, formData.description, existingReports]);
+
+  const activeErrorEntries = useMemo(
+    () => Object.entries(errors).filter(([, message]) => Boolean(message)),
+    [errors]
+  );
+
+  const dispatchViolationAlert = useCallback(
+    (data: BugReportFormData, duplicateMatches: typeof similarReports) => {
+      const severity = PRIORITY_TO_SEVERITY[data.priority] ?? 'minor';
+      const meetsThreshold = SEVERITY_RANK[severity] >= SEVERITY_RANK[SEVERITY_THRESHOLD];
+
+      const affectedRecordIds = duplicateMatches.map((match) => match.report.id);
+      const diffContext = [
+        `title: ${data.title}`,
+        `category: ${data.category}`,
+        `priority: ${data.priority}`,
+        `buildVersion: ${data.buildVersion || 'unknown'}`,
+        `duplicateMatches: ${duplicateMatches.length}`,
+      ].join('\n');
+
+      void dispatchInvariantAlert({
+        severity,
+        immediate: meetsThreshold,
+        title: `Bug report invariant violation: ${data.title}`,
+        message: data.description,
+        diffContext,
+        affectedRecordIds,
+        metadata: {
+          category: data.category,
+          priority: data.priority,
+          reporterEmail: data.reporterEmail || null,
+        },
+      }).catch(() => {
+        // Alert dispatch must never block bug report submission.
+      });
+    },
+    [],
+  );
+
+  const focusField = (fieldKey: string) => {
+    const fieldId = FIELD_ELEMENT_IDS[fieldKey] ?? `bug-${fieldKey}`;
+    document.getElementById(fieldId)?.focus();
+  };
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -69,9 +152,9 @@ export const BugReportForm: React.FC<BugReportFormProps> = ({
     setErrors(newErrors);
     const firstError = Object.keys(newErrors)[0];
     if (firstError) {
+      focusField(firstError);
       window.setTimeout(() => {
-        const fieldId = firstError === 'agreeToTerms' ? firstError : `bug-${firstError}`;
-        document.getElementById(fieldId)?.focus();
+        focusField(firstError);
       }, 0);
     }
     return Object.keys(newErrors).length === 0;
@@ -91,6 +174,7 @@ export const BugReportForm: React.FC<BugReportFormProps> = ({
       return;
     }
 
+    dispatchViolationAlert(formData, similarReports);
     onSubmit(formData);
   };
 
@@ -99,7 +183,20 @@ export const BugReportForm: React.FC<BugReportFormProps> = ({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+    <form onSubmit={handleSubmit} className="space-y-6" noValidate aria-label="Bug report submission form">
+      {activeErrorEntries.length > 0 && (
+        <div
+          data-testid="bug-form-error-summary"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 text-sm text-red-200"
+        >
+          <p className="font-semibold">
+            Please resolve {activeErrorEntries.length} validation {activeErrorEntries.length === 1 ? 'error' : 'errors'} before submitting.
+          </p>
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           {/* Basic Information */}
@@ -119,6 +216,7 @@ export const BugReportForm: React.FC<BugReportFormProps> = ({
                   onChange={(e) => handleInputChange('title', e.target.value)}
                   className="w-full px-3 py-2 bg-trellis-vine/20 border border-trellis-vine/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-trellis-leaf focus:ring-1 focus:ring-trellis-leaf"
                   placeholder="Brief summary of the issue"
+                  aria-required="true"
                   aria-invalid={Boolean(errors.title)}
                   aria-describedby={errors.title ? 'bug-title-error' : undefined}
                 />
@@ -139,6 +237,7 @@ export const BugReportForm: React.FC<BugReportFormProps> = ({
                   rows={4}
                   className="w-full px-3 py-2 bg-trellis-vine/20 border border-trellis-vine/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-trellis-leaf focus:ring-1 focus:ring-trellis-leaf"
                   placeholder="Detailed description of the issue"
+                  aria-required="true"
                   aria-invalid={Boolean(errors.description)}
                   aria-describedby={errors.description ? 'bug-description-error' : undefined}
                 />
@@ -166,6 +265,7 @@ export const BugReportForm: React.FC<BugReportFormProps> = ({
                   rows={4}
                   className="w-full px-3 py-2 bg-trellis-vine/20 border border-trellis-vine/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-trellis-leaf focus:ring-1 focus:ring-trellis-leaf"
                   placeholder="1. Step one&#10;2. Step two&#10;3. Step three"
+                  aria-required="true"
                   aria-invalid={Boolean(errors.stepsToReproduce)}
                   aria-describedby={errors.stepsToReproduce ? 'bug-steps-error' : undefined}
                 />
@@ -186,6 +286,7 @@ export const BugReportForm: React.FC<BugReportFormProps> = ({
                   rows={3}
                   className="w-full px-3 py-2 bg-trellis-vine/20 border border-trellis-vine/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-trellis-leaf focus:ring-1 focus:ring-trellis-leaf"
                   placeholder="What should have happened"
+                  aria-required="true"
                   aria-invalid={Boolean(errors.expectedBehavior)}
                   aria-describedby={errors.expectedBehavior ? 'bug-expected-error' : undefined}
                 />
@@ -206,6 +307,7 @@ export const BugReportForm: React.FC<BugReportFormProps> = ({
                   rows={3}
                   className="w-full px-3 py-2 bg-trellis-vine/20 border border-trellis-vine/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-trellis-leaf focus:ring-1 focus:ring-trellis-leaf"
                   placeholder="What actually happened"
+                  aria-required="true"
                   aria-invalid={Boolean(errors.actualBehavior)}
                   aria-describedby={errors.actualBehavior ? 'bug-actual-error' : undefined}
                 />
@@ -227,6 +329,7 @@ export const BugReportForm: React.FC<BugReportFormProps> = ({
                 name="priority"
                 value={formData.priority}
                 onChange={(e) => handleInputChange('priority', e.target.value)}
+                aria-required="true"
                 className="w-full px-3 py-2 bg-trellis-vine/20 border border-trellis-vine/50 rounded-lg text-white focus:outline-none focus:border-trellis-leaf focus:ring-1 focus:ring-trellis-leaf"
               >
                 {PRIORITY_LEVELS.map(priority => (
@@ -246,6 +349,7 @@ export const BugReportForm: React.FC<BugReportFormProps> = ({
                 name="category"
                 value={formData.category}
                 onChange={(e) => handleInputChange('category', e.target.value)}
+                aria-required="true"
                 className="w-full px-3 py-2 bg-trellis-vine/20 border border-trellis-vine/50 rounded-lg text-white focus:outline-none focus:border-trellis-leaf focus:ring-1 focus:ring-trellis-leaf"
               >
                 {BUG_CATEGORIES.map(category => (
@@ -269,12 +373,29 @@ export const BugReportForm: React.FC<BugReportFormProps> = ({
 
           {/* Contact Information */}
           <div className="bg-trellis-vine/10 border border-trellis-vine/30 rounded-lg p-6 backdrop-blur-sm">
-            <h3 className="text-lg font-semibold mb-4 text-trellis-leaf">Contact Information</h3>
-            
-            <div>
-              <label htmlFor="bug-email" className="block text-sm font-medium text-gray-300 mb-2">
-                Email Address (Optional)
-              </label>
+            <h3 className="text-lg font-semibold mb-4 text-trellis-leaf">Contact Information</h3>              <div>
+                <label htmlFor="bug-build-version" className="block text-sm font-medium text-gray-300 mb-2">
+                  Application Build Version (Optional)
+                </label>
+                <input
+                  id="bug-build-version"
+                  name="buildVersion"
+                  type="text"
+                  value={formData.buildVersion || ''}
+                  onChange={(e) => handleInputChange('buildVersion', e.target.value)}
+                  placeholder="e.g. v0.1.0"
+                  aria-describedby="bug-build-version-help"
+                  className="w-full px-3 py-2 bg-trellis-vine/20 border border-trellis-vine/50 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-trellis-leaf focus:ring-1 focus:ring-trellis-leaf"
+                />
+                <p id="bug-build-version-help" className="mt-2 text-sm text-gray-400">
+                  Tagging the build helps maintainers spot regressions caused by a release.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="bug-email" className="block text-sm font-medium text-gray-300 mb-2">
+                  Email Address (Optional)
+                </label>
               <input
                 id="bug-email"
                 name="reporterEmail"
@@ -302,8 +423,9 @@ export const BugReportForm: React.FC<BugReportFormProps> = ({
                 type="checkbox"
                 id="agreeToTerms"
                 checked={formData.agreeToTerms}
-                 aria-invalid={Boolean(errors.agreeToTerms)}
-                 aria-describedby={errors.agreeToTerms ? 'terms-error' : undefined}
+                aria-required="true"
+                aria-invalid={Boolean(errors.agreeToTerms)}
+                aria-describedby={errors.agreeToTerms ? 'terms-error' : undefined}
                 onChange={(e) => handleInputChange('agreeToTerms', e.target.checked)}
                 className="mt-1 w-4 h-4 bg-trellis-vine/20 border-trellis-vine/50 rounded focus:ring-trellis-leaf focus:ring-1"
               />
@@ -323,6 +445,50 @@ export const BugReportForm: React.FC<BugReportFormProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Duplicate Warning */}
+          {similarReports.length > 0 && (
+            <div
+              role="alert"
+              data-testid="duplicate-warning"
+              className="bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-6 backdrop-blur-sm"
+            >
+              <div className="flex items-start space-x-3">
+                <svg
+                  className="w-6 h-6 text-yellow-400 shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+                  />
+                </svg>
+                <div className="flex-1">
+                  <h3 className="text-base font-semibold text-yellow-400 mb-1">
+                    Possible duplicate report
+                  </h3>
+                  <p className="text-sm text-gray-300 mb-2">
+                    Similar reports already exist. Add detail that distinguishes yours, or comment on
+                    an existing report instead of filing a new one.
+                  </p>
+                  <ul className="space-y-1 text-sm text-gray-300">
+                    {similarReports.map((match) => (
+                      <li key={match.report.id} className="flex items-center justify-between gap-4">
+                        <span className="truncate">{match.report.title}</span>
+                        <span className="text-xs text-gray-400 shrink-0">
+                          {Math.round(match.score * 100)}% match
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Submit Button */}
           <div className="flex justify-end">

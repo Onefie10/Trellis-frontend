@@ -56,3 +56,25 @@ export interface EarningsHistory {
   amount: number;
   source: 'direct' | 'tier2' | 'tier3';
 }
+
+// ---------------------------------------------------------------------------
+// Referral click analytics & vanity aliases (#128)
+// ---------------------------------------------------------------------------
+// The canonical shapes live in lib/referral-metrics and lib/vanity-slug so the
+// client recorder, the API store and the dashboard cannot drift apart.
+export type {
+  ConversionStatus,
+  DeviceType,
+  ReferralClickMetrics,
+  ReferralDeviceMetric,
+  ReferralEventKind,
+  ReferralLinkEvent,
+  ReferralMetricPoint,
+  ReferralSourceMetric,
+  ReferrerSource,
+} from '@/lib/referral-metrics';
+export type {
+  VanitySlugRecord,
+  VanitySlugRejectionReason,
+  VanitySlugValidation,
+} from '@/lib/vanity-slug';

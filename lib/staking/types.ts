@@ -32,6 +32,8 @@ export interface StakeableAssetConfig {
   rewardWeight: number;
   stakeMultiplier?: number;
   minStake?: number;
+  unbondingPeriodMs?: number;
+  emergencyPenaltyRate?: number;
 }
 
 export interface StakingPoolConfig {
@@ -48,6 +50,11 @@ export interface AssetPoolState {
   emissionPerSecond: number;
 }
 
+export interface UnbondingRequest {
+  amount: number;
+  unlockTime: number;
+}
+
 export interface StakePosition {
   userId: string;
   assetId: string;
@@ -56,6 +63,7 @@ export interface StakePosition {
   rewardDebt: number;
   pendingRewards: number;
   lastUpdatedAt: number;
+  unbondingRequests: UnbondingRequest[];
 }
 
 export interface StakeActionResult {

@@ -1,0 +1,181 @@
+{
+  "description": "One valid envelope per registered event, at the current version. The validation command asserts every case is accepted, so this file doubles as a coverage check that the catalog is fully exercised.",
+  "expectAll": "accepted",
+  "cases": [
+    {
+      "name": "offline-queue-change reports the current backlog depth",
+      "event": {
+        "name": "offline-queue-change",
+        "version": "1.0.0",
+        "id": "1f0c2a44-0000-4000-8000-000000000001",
+        "timestamp": "2026-02-11T09:14:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "pending": 3 }
+      }
+    },
+    {
+      "name": "offline-queue-synced reports a fully successful flush",
+      "event": {
+        "name": "offline-queue-synced",
+        "version": "1.0.0",
+        "id": "1f0c2a44-0000-4000-8000-000000000002",
+        "timestamp": "2026-02-11T09:15:30.000Z",
+        "source": "pwa-utils",
+        "payload": {
+          "synced": ["sub-1", "sub-2", "sub-3"],
+          "dropped": [],
+          "remaining": 0
+        }
+      }
+    },
+    {
+      "name": "offline-queue-synced reports dropped poison payloads",
+      "event": {
+        "name": "offline-queue-synced",
+        "version": "1.0.0",
+        "id": "1f0c2a44-0000-4000-8000-000000000003",
+        "timestamp": "2026-02-11T09:16:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "synced": ["sub-1"], "dropped": ["sub-2"], "remaining": 0 }
+      }
+    },
+    {
+      "name": "sw-update signals a waiting service worker",
+      "event": {
+        "name": "sw-update",
+        "version": "1.0.0",
+        "id": "1f0c2a44-0000-4000-8000-000000000004",
+        "timestamp": "2026-02-11T09:17:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "available": true }
+      }
+    },
+    {
+      "name": "pwa-install-available signals a captured install prompt",
+      "event": {
+        "name": "pwa-install-available",
+        "version": "1.0.0",
+        "id": "1f0c2a44-0000-4000-8000-000000000005",
+        "timestamp": "2026-02-11T09:18:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "available": true }
+      }
+    },
+    {
+      "name": "pwa-installed signals a completed install",
+      "event": {
+        "name": "pwa-installed",
+        "version": "1.0.0",
+        "id": "1f0c2a44-0000-4000-8000-000000000006",
+        "timestamp": "2026-02-11T09:19:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "installed": true }
+      }
+    },
+    {
+      "name": "connection-change reports going offline",
+      "event": {
+        "name": "connection-change",
+        "version": "1.0.0",
+        "id": "1f0c2a44-0000-4000-8000-000000000007",
+        "timestamp": "2026-02-11T09:20:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "online": false }
+      }
+    },
+    {
+      "name": "connection-quality-change carries the full Network Information API shape",
+      "event": {
+        "name": "connection-quality-change",
+        "version": "1.0.0",
+        "id": "1f0c2a44-0000-4000-8000-000000000008",
+        "timestamp": "2026-02-11T09:21:00.000Z",
+        "source": "pwa-utils",
+        "payload": {
+          "online": true,
+          "effectiveType": "4g",
+          "downlink": 10.5,
+          "rtt": 60,
+          "saveData": false
+        }
+      }
+    },
+    {
+      "name": "connection-quality-change tolerates a browser with no navigator.connection",
+      "event": {
+        "name": "connection-quality-change",
+        "version": "1.0.0",
+        "id": "1f0c2a44-0000-4000-8000-000000000009",
+        "timestamp": "2026-02-11T09:22:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "online": true }
+      }
+    },
+    {
+      "name": "WALLET_DISCONNECTED carries an optional reason",
+      "event": {
+        "name": "WALLET_DISCONNECTED",
+        "version": "1.0.0",
+        "id": "1f0c2a44-0000-4000-8000-00000000000a",
+        "timestamp": "2026-02-11T09:23:00.000Z",
+        "source": "tab-8f2a",
+        "payload": { "reason": "logout" }
+      }
+    },
+    {
+      "name": "WALLET_DISCONNECTED with no reason is still valid",
+      "event": {
+        "name": "WALLET_DISCONNECTED",
+        "version": "1.0.0",
+        "id": "1f0c2a44-0000-4000-8000-00000000000b",
+        "timestamp": "2026-02-11T09:24:00.000Z",
+        "source": "tab-8f2a",
+        "payload": {}
+      }
+    },
+    {
+      "name": "NETWORK_CHANGED names the new Stellar network",
+      "event": {
+        "name": "NETWORK_CHANGED",
+        "version": "2.0.0",
+        "id": "1f0c2a44-0000-4000-8000-00000000000c",
+        "timestamp": "2026-02-11T09:25:00.000Z",
+        "source": "tab-8f2a",
+        "payload": { "network": "mainnet" }
+      }
+    },
+    {
+      "name": "NETWORK_CHANGED accepts every network the app can produce",
+      "event": {
+        "name": "NETWORK_CHANGED",
+        "version": "2.0.0",
+        "id": "1f0c2a44-0000-4000-8000-000000000012",
+        "timestamp": "2026-02-11T09:27:00.000Z",
+        "source": "tab-8f2a",
+        "payload": { "network": "futurenet" }
+      }
+    },
+    {
+      "name": "NETWORK_CHANGED 1.0.0 stays readable so an older tab is not disconnected",
+      "event": {
+        "name": "NETWORK_CHANGED",
+        "version": "1.0.0",
+        "id": "1f0c2a44-0000-4000-8000-000000000013",
+        "timestamp": "2026-02-11T09:28:00.000Z",
+        "source": "old-tab",
+        "payload": { "network": "public" }
+      }
+    },
+    {
+      "name": "THEME_MUTATED names the new theme mode",
+      "event": {
+        "name": "THEME_MUTATED",
+        "version": "1.0.0",
+        "id": "1f0c2a44-0000-4000-8000-00000000000d",
+        "timestamp": "2026-02-11T09:26:00.000Z",
+        "source": "tab-8f2a",
+        "payload": { "mode": "dark" }
+      }
+    }
+  ]
+}

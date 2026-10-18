@@ -1,10 +1,15 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ProvenanceRecord, ProvenanceFilter as FilterType } from "../../../lib/provenance/types";
 import { provenanceService } from "../../../lib/provenance/service";
 import { provenanceExport } from "../../../lib/provenance/export";
 import ProvenanceFilter from "./ProvenanceFilter";
+import ZkVerificationBadge from "./ZkVerificationBadge";
+import ZkProofInspector from "./ZkProofInspector";
+import MerkleProofInspector from "./MerkleProofInspector";
+import { extractAttestation } from "../zk/attestation";
+import type { AgentExecutionAttestation, ZkVerificationResult } from "../zk/types";
 
 export default function ProvenanceExplorer() {
   const [records, setRecords] = useState<ProvenanceRecord[]>([]);
@@ -12,6 +17,8 @@ export default function ProvenanceExplorer() {
   const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
   const [filter, setFilter] = useState<FilterType>({});
   const [loading, setLoading] = useState(true);
+  const [zkResults, setZkResults] = useState<Record<string, ZkVerificationResult>>({});
+  const [inspectedRecordId, setInspectedRecordId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -30,8 +37,27 @@ export default function ProvenanceExplorer() {
     fetchData();
   }, [filter]);
 
+  /**
+   * Attestations are derived once per record set so their object identity stays
+   * stable — the verification badge keys its effect off that identity, and a new
+   * object on every render would re-run verification in a loop.
+   */
+  const attestations = useMemo(() => {
+    const map = new Map<string, AgentExecutionAttestation>();
+    for (const record of records) {
+      const attestation = extractAttestation(record.details.payload);
+      if (attestation) map.set(record.id, attestation);
+    }
+    return map;
+  }, [records]);
+
+  const verifiedCount = useMemo(
+    () => Object.values(zkResults).filter((entry) => entry.status === "verified").length,
+    [zkResults],
+  );
+
   const handleClearFilters = () => setFilter({});
-  
+
   const handleExportJSON = () => {
     const jsonStr = provenanceExport.toJSON(records);
     provenanceExport.downloadFile(jsonStr, "provenance_records.json", "application/json");
@@ -62,6 +88,10 @@ export default function ProvenanceExplorer() {
     }
   };
 
+  const inspectedAttestation = inspectedRecordId
+    ? attestations.get(inspectedRecordId) ?? null
+    : null;
+
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -69,10 +99,24 @@ export default function ProvenanceExplorer() {
           <h1 className="text-3xl font-bold glow-text leading-tight mb-2">Provenance Explorer</h1>
           <p className="text-gray-400 text-sm">Visualize and audit every agent action in the Trellis universe.</p>
         </div>
-        <div className="flex gap-4">
+        <div className="flex gap-6">
           <div className="text-right">
             <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">Total Actions</p>
             <p className="text-2xl font-bold text-white">{records.length}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">ZK Attested</p>
+            <p className="text-2xl font-bold text-trellis-vine">{attestations.size}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-gray-500 uppercase tracking-widest font-bold mb-1">ZK Verified</p>
+            <p
+              className="text-2xl font-bold text-emerald-400"
+              data-testid="zk-verified-count"
+              aria-label="Cryptographically verified proofs"
+            >
+              {verifiedCount}
+            </p>
           </div>
         </div>
       </div>
@@ -102,8 +146,8 @@ export default function ProvenanceExplorer() {
 
           <div className="space-y-8 relative">
             {records.map((record, index) => (
-              <div 
-                key={record.id} 
+              <div
+                key={record.id}
                 className={`flex flex-col md:flex-row items-start md:items-center gap-6 group transition-smooth
                   ${index % 2 === 0 ? "md:flex-row" : "md:flex-row-reverse"}`}
               >
@@ -127,6 +171,24 @@ export default function ProvenanceExplorer() {
                   <p className="text-xs text-gray-500 mb-4 font-mono">
                     {new Date(record.timestamp).toLocaleString()}
                   </p>
+
+                  {attestations.has(record.id) && (
+                    <div className="mb-4">
+                      <ZkVerificationBadge
+                        attestation={attestations.get(record.id)!}
+                        onVerified={(result) =>
+                          setZkResults((previous) => ({ ...previous, [record.id]: result }))
+                        }
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setInspectedRecordId(record.id)}
+                        className="mt-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400 hover:text-trellis-vine"
+                      >
+                        Inspect ZK proof →
+                      </button>
+                    </div>
+                  )}
 
                   <div className={`text-sm text-gray-300 space-y-2 mb-4 bg-trellis-ground/30 p-3 rounded-lg border border-trellis-vine/10 ${index % 2 === 0 ? "" : "md:text-left"}`}>
                     {record.details.input && (
@@ -169,11 +231,23 @@ export default function ProvenanceExplorer() {
                       </div>
                     )}
                   </div>
+
+                  {record.details.proof && record.txHash && (
+                    <MerkleProofInspector proof={record.details.proof} txHash={record.txHash} />
+                  )}
                 </div>
               </div>
             ))}
           </div>
         </div>
+      )}
+
+      {inspectedAttestation && inspectedRecordId && (
+        <ZkProofInspector
+          attestation={inspectedAttestation}
+          result={zkResults[inspectedRecordId] ?? null}
+          onClose={() => setInspectedRecordId(null)}
+        />
       )}
     </div>
   );

@@ -25,4 +25,8 @@ library because:
 | Simulations | `store/useSimulationStore.ts` | `app/simulations/`, `components/simulations/` |
 | Affiliate | `features/affiliate-dashboard/store/useAffiliateStore.ts` | `features/affiliate-dashboard/` |
 
+## Persistence and hydration safety
+
+All persisted stores use the shared storage adapter in `store/persistence.ts` and expose a `hasHydrated` flag so client code waits until rehydration completes before rendering persisted values. This prevents SSR-to-client hydration mismatch warnings when local state is restored from `localStorage`.
+
 Do not reintroduce `@reduxjs/toolkit` or `react-redux`.

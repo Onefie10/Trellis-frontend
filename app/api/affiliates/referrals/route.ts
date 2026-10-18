@@ -4,6 +4,7 @@ import {
   isValidStellarAddress,
   listReferrals,
 } from '@/lib/affiliate-store';
+import { csrfMiddleware } from '@/lib/security/csrf';
 
 /**
  * GET /api/affiliates/referrals?wallet=<address>
@@ -45,6 +46,9 @@ export async function GET(request: NextRequest) {
  * calls return the same code instead of minting a new one each time.
  */
 export async function POST(request: NextRequest) {
+  const csrfError = csrfMiddleware(request);
+  if (csrfError) return csrfError;
+
   try {
     const body = await request.json();
     const { walletAddress } = body;

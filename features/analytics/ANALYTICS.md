@@ -20,8 +20,14 @@ analyticsManager.initialize({
   enabled: true,
   retentionDays: 90,
   samplingRate: 1.0,
+  epsilon: 0.5,
+  dailyPrivacyBudget: 2,
 });
 ```
+
+Client reports use a Laplace mechanism. Each release uses the configured `epsilon` (default `0.5`) and contributes to a daily browser-local budget (default `2`). The manager stops releasing batches when the budget is exhausted. Smaller epsilon means stronger noise; values are validated to remain between `0.1` and `10`.
+
+Before sending, queued events are reduced to counts grouped only by allowlisted metric name and type. IDs, exact timestamps, raw values, dimensions, and metadata are omitted; timestamps are rounded to the UTC day. The dashboard's **Privacy protection audit** panel displays the active epsilon, remaining daily budget, and recent release decisions. The budget ledger is stored locally in the browser, so it is an operational client-side limit rather than a tamper-proof server-enforced account budget.
 
 ## Safe Metrics
 
@@ -95,3 +101,6 @@ Tests verify:
 - Only safe dimensions are aggregated
 - Metrics are properly validated
 - Error context is sanitized
+- Laplace samples follow the configured scale and are applied to bounded aggregate reports
+- Reports do not contain event-level identifiers, dimensions, or precise timestamps
+- Daily epsilon budgets stop additional report releases when exhausted

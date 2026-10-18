@@ -24,6 +24,24 @@ import type {
   PayoutRequest,
   ReferralRecord,
 } from '@/features/affiliate-dashboard/types';
+import {
+  buildVanityReferralUrl,
+  normalizeVanitySlug,
+  validateVanitySlug,
+  VanitySlugError,
+  type VanitySlugRecord,
+} from '@/lib/vanity-slug';
+import {
+  classifyReferrerSource,
+  computeReferralClickMetrics,
+  detectDeviceType,
+  emptyReferralClickMetrics,
+  toConversionStatus,
+  type ConversionStatus,
+  type ReferralClickMetrics,
+  type ReferralEventKind,
+  type ReferralLinkEvent,
+} from '@/lib/referral-metrics';
 
 // ---------------------------------------------------------------------------
 // Shared primitives
@@ -156,6 +174,10 @@ interface AffiliateState {
   idempotencyIndex: Map<string, IdempotencyEntry>;
   /** wallet -> lifetime credited commission earnings (XLM) */
   earned: Map<string, number>;
+  /** normalized vanity slug -> alias record (issue #128) */
+  vanitySlugs: Map<string, VanitySlugRecord>;
+  /** referral link click/view ledger, the source of click metrics (issue #128) */
+  linkEvents: ReferralLinkEvent[];
   /** test seam: force the payout submission path to fail */
   payoutBackendMode: 'ok' | 'fail';
 }
@@ -171,6 +193,8 @@ function freshState(): AffiliateState {
     payouts: [],
     idempotencyIndex: new Map(),
     earned: new Map(),
+    vanitySlugs: new Map(),
+    linkEvents: [],
     payoutBackendMode: 'ok',
   };
 }
@@ -586,4 +610,119 @@ export function getProgram(wallet?: string): AffiliateProgram {
     joinedAt:
       (wallet && state.enrolledAt.get(wallet)) ?? new Date(Date.now() - 86_400_000 * 180).toISOString(),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Vanity referral aliases (#128)
+// ---------------------------------------------------------------------------
+// Clean trellis.market/r/<slug> aliases that resolve to a specific marketplace
+// agent. Uniqueness is enforced across *all* wallets (case-insensitively via
+// normalization), which is the collision guarantee the client pre-checks
+// against but can never provide on its own.
+
+export function registerVanitySlug(
+  wallet: string,
+  rawSlug: string,
+  targetAgentId: string,
+): VanitySlugRecord {
+  // The owner is the wallet public key (or app user id) the alias belongs to.
+  // Callers that need chain-level checks validate the address themselves; the
+  // registry only requires a non-empty owner so attribution never goes missing.
+  if (!wallet || wallet.trim() === '') {
+    throw new VanitySlugError('INVALID_WALLET', 'An owner wallet or user id is required');
+  }
+  if (!targetAgentId || targetAgentId.trim() === '') {
+    throw new VanitySlugError('AGENT_REQUIRED', 'A target marketplace agent is required');
+  }
+
+  const validation = validateVanitySlug(rawSlug, { taken: state.vanitySlugs.keys() });
+  if (!validation.valid) {
+    throw new VanitySlugError(
+      validation.reason ?? 'INVALID_CHARACTERS',
+      validation.error ?? 'Invalid vanity slug',
+      validation.reason === 'COLLISION' ? 409 : 400,
+    );
+  }
+
+  const record: VanitySlugRecord = {
+    slug: validation.normalized,
+    ownerWallet: wallet,
+    targetAgentId: targetAgentId.trim(),
+    createdAt: new Date().toISOString(),
+  };
+  state.vanitySlugs.set(record.slug, record);
+  return record;
+}
+
+/** Resolve a slug (any casing) to its alias record. Null = not registered. */
+export function resolveVanitySlug(rawSlug: string): VanitySlugRecord | null {
+  return state.vanitySlugs.get(normalizeVanitySlug(rawSlug)) ?? null;
+}
+
+export function listVanitySlugs(wallet: string): VanitySlugRecord[] {
+  return [...state.vanitySlugs.values()].filter((record) => record.ownerWallet === wallet);
+}
+
+/** The clean share URL for a registered alias. */
+export function getVanitySlugUrl(record: VanitySlugRecord): string {
+  return buildVanityReferralUrl(record.slug);
+}
+
+// ---------------------------------------------------------------------------
+// Referral click analytics (#128)
+// ---------------------------------------------------------------------------
+
+export interface RecordClickInput {
+  slug: string;
+  referrer?: string;
+  userAgent?: string;
+  conversionStatus?: ConversionStatus | boolean;
+  kind?: ReferralEventKind;
+}
+
+/**
+ * Record a click (or link view) against a registered alias. The event borrows
+ * the alias's agent for attribution; events for unknown slugs are refused so
+ * metrics can never be attributed to something that was not created.
+ */
+export function recordReferralClickEvent(input: RecordClickInput): ReferralLinkEvent {
+  const record = resolveVanitySlug(input.slug);
+  if (!record) {
+    throw new VanitySlugError('NOT_FOUND', `Unknown vanity slug "${input.slug}"`, 404);
+  }
+
+  const event: ReferralLinkEvent = {
+    id: randomUUID(),
+    kind: input.kind === 'view' ? 'view' : 'click',
+    slug: record.slug,
+    targetAgentId: record.targetAgentId,
+    timestamp: new Date().toISOString(),
+    referrerSource: classifyReferrerSource(input.referrer),
+    deviceType: detectDeviceType(input.userAgent),
+    conversionStatus: toConversionStatus(input.conversionStatus),
+    referrer: input.referrer,
+    userAgent: input.userAgent,
+  };
+  state.linkEvents.push(event);
+  return event;
+}
+
+/** CTR / conversion metrics for every alias owned by a wallet. */
+export function getReferralClickMetrics(
+  wallet: string,
+  days: number = 30,
+): ReferralClickMetrics {
+  const owned = new Set(listVanitySlugs(wallet).map((record) => record.slug));
+  if (owned.size === 0) {
+    return emptyReferralClickMetrics();
+  }
+
+  const cutoff = Date.now() - days * 86_400_000;
+  const events = state.linkEvents.filter((event) => {
+    if (!owned.has(event.slug)) return false;
+    const timestamp = new Date(event.timestamp).getTime();
+    return !Number.isNaN(timestamp) && timestamp >= cutoff;
+  });
+
+  return computeReferralClickMetrics(events);
 }

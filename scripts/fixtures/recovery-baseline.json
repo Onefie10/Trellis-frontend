@@ -1,0 +1,145 @@
+{
+  "agents": [
+    {
+      "id": "ag-1",
+      "name": "Canopy Predictor",
+      "description": "Predicts market volatility for XLM/USDC",
+      "author": "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7",
+      "rating": 4.8,
+      "users": 1420,
+      "behavior": "predictive-analytics",
+      "capabilities": ["forecasting", "risk-assessment"],
+      "status": "active",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-02-15T12:00:00.000Z"
+    },
+    {
+      "id": "ag-2",
+      "name": "Nebula Guard",
+      "description": "Monitors smart contract state changes and anomaly detection",
+      "author": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+      "rating": 4.9,
+      "users": 850,
+      "behavior": "security-sentinel",
+      "capabilities": ["monitoring", "alerting"],
+      "status": "active",
+      "createdAt": "2026-01-10T00:00:00.000Z",
+      "updatedAt": "2026-02-20T10:00:00.000Z"
+    }
+  ],
+  "testCases": [
+    {
+      "id": "tc-101",
+      "name": "Volatility Predictor Benchmark",
+      "description": "Simulates 50 rounds of Soroban contract invocation",
+      "contractId": "CA3D5KRYM6CB7OWQ6TWYRR3Z4T7ZQVNC7KZTRTFQ9876543210ABCDEF",
+      "functionName": "predict_spread",
+      "args": [100, "XLM"],
+      "network": "testnet",
+      "createdAt": "2026-01-05T00:00:00.000Z",
+      "updatedAt": "2026-01-05T00:00:00.000Z"
+    }
+  ],
+  "testExecutions": [
+    {
+      "id": "te-201",
+      "testCaseId": "tc-101",
+      "status": "completed",
+      "qualityScore": 96,
+      "logs": ["Execution initialized", "Result validated against oracle"],
+      "events": [],
+      "startTime": "2026-01-05T10:00:00.000Z",
+      "endTime": "2026-01-05T10:00:02.500Z",
+      "metrics": {
+        "cpuInstructions": 150000,
+        "ramBytes": 2048,
+        "ledgerReadBytes": 128,
+        "ledgerWriteBytes": 64,
+        "readCount": 2,
+        "writeCount": 1,
+        "costXlm": "0.00012"
+      }
+    }
+  ],
+  "provenanceRecords": [
+    {
+      "id": "pv-1",
+      "agentId": "ag-1",
+      "agentName": "Canopy Predictor",
+      "userId": "user-123",
+      "userName": "Alex Explorer",
+      "action": "input_received",
+      "timestamp": "2026-01-05T10:00:00.000Z",
+      "status": "success",
+      "details": { "input": "Predict market volatility for XLM/USDC" }
+    },
+    {
+      "id": "pv-2",
+      "agentId": "ag-1",
+      "agentName": "Canopy Predictor",
+      "userId": "user-123",
+      "userName": "Alex Explorer",
+      "action": "on_chain_submission",
+      "timestamp": "2026-01-05T10:00:03.000Z",
+      "status": "success",
+      "txHash": "9b1deb4d83b4b56653c07e0c4a4a984400e9941913fb9a365cb6f962cb17f52f",
+      "details": { "payload": { "amount": "100", "asset": "XLM" } }
+    }
+  ],
+  "referralCodes": [
+    {
+      "code": "ASTRDEMO12",
+      "ownerWallet": "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7",
+      "createdAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "referrals": [
+    {
+      "id": "ref-1",
+      "referralCode": "ASTRDEMO12",
+      "referredUserAddress": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+      "referredUserName": "Sam Security",
+      "status": "converted",
+      "commissionRate": 10,
+      "commissionAmount": "150.00",
+      "createdAt": "2026-01-10T12:00:00.000Z",
+      "convertedAt": "2026-01-11T09:30:00.000Z"
+    }
+  ],
+  "earningsLedger": [
+    {
+      "wallet": "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7",
+      "earnedXlm": 500
+    }
+  ],
+  "payouts": [
+    {
+      "id": "pay-1",
+      "walletAddress": "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7",
+      "amount": "150.00",
+      "status": "completed",
+      "requestedAt": "2026-01-12T10:00:00.000Z",
+      "processedAt": "2026-01-12T10:05:00.000Z",
+      "transactionHash": "5c6a1e3e7f0b5d98a2c1b4e6f8a0d3c5e7b9a1d4f6a8c0e2b4d6f8a0c2e4b6d8"
+    }
+  ],
+  "bugReports": [
+    {
+      "id": "br-1",
+      "title": "WebSocket telemetry reconnection jitter",
+      "description": "Telemetry stream temporarily drops heartbeat packets during burst traffic",
+      "stepsToReproduce": "Trigger 50 concurrent transactions in stress environment",
+      "expectedBehavior": "Heartbeat packets buffered smoothly",
+      "actualBehavior": "Brief reconnect sequence initiated",
+      "priority": "medium",
+      "category": "performance",
+      "screenshots": [],
+      "reporterAddress": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+      "status": "resolved",
+      "createdAt": "2026-01-15T08:00:00.000Z",
+      "updatedAt": "2026-01-16T14:00:00.000Z",
+      "rewardAmount": 25,
+      "rewardStatus": "paid"
+    }
+  ]
+}

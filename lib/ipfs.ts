@@ -1,6 +1,7 @@
 import { create as ipfsHttpClient, IPFSHTTPClient } from 'ipfs-http-client';
 import { NFTStorage, File as NFTFile } from 'nft.storage';
 import axios from 'axios';
+import { CacheOptions, getOrFetchCachedValue } from './cache-manager';
 
 export interface IPFSUploadResult {
   cid: string;
@@ -15,6 +16,11 @@ export interface AgentMetadata {
 }
 
 const IPFS_GATEWAY = 'https://ipfs.io/ipfs/';
+export const IPFS_GATEWAYS = [
+  'https://ipfs.io/ipfs/',
+  'https://dweb.link/ipfs/',
+  'https://cloudflare-ipfs.com/ipfs/',
+];
 
 // Use env or config for these
 const NFT_STORAGE_TOKEN = process.env.NEXT_PUBLIC_NFT_STORAGE_TOKEN || '';
@@ -48,6 +54,30 @@ export async function uploadToIPFS(
     }
   }
   throw lastError;
+}
+
+export async function sha256Hex(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export interface IPFSFetchOptions extends CacheOptions { gateways?: string[]; expectedSha256?: string; signal?: AbortSignal; }
+
+export async function fetchVerifiedIPFSMetadata<T = Record<string, unknown>>(cid: string, options: IPFSFetchOptions = {}): Promise<T> {
+  return getOrFetchCachedValue<T>(cid, async () => {
+    let lastError: unknown;
+    for (const gateway of options.gateways ?? IPFS_GATEWAYS) {
+      try {
+        const response = await fetch(`${gateway}${encodeURIComponent(cid)}`, { signal: options.signal });
+        if (!response.ok) throw new Error(`Gateway returned HTTP ${response.status}`);
+        const raw = await response.text();
+        if (options.expectedSha256 && (await sha256Hex(raw)).toLowerCase() !== options.expectedSha256.toLowerCase()) throw new Error('IPFS metadata hash verification failed');
+        return JSON.parse(raw) as T;
+      } catch (error) { lastError = error; }
+    }
+    throw new Error(`Unable to fetch verified IPFS metadata for ${cid}: ${lastError instanceof Error ? lastError.message : 'all gateways failed'}`);
+  }, options);
 }
 
 // Validate image size (max 2MB)

@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { sanitizeHtml, sanitizeMarkdown, stripControlAndBidi } from '@/lib/security/content-sanitizer';
+import DOMPurify from 'dompurify';
 
 export interface SafeContentProps {
   content: string;
@@ -18,7 +19,7 @@ export const SafeContent: React.FC<SafeContentProps> = ({
   className = '',
 }) => {
   if (type === 'html') {
-    const cleanHtml = sanitizeHtml(content);
+    const cleanHtml = DOMPurify.sanitize(sanitizeHtml(content), { USE_PROFILES: { html: true } });
     return <div className={className} dangerouslySetInnerHTML={{ __html: cleanHtml }} />;
   }
 
