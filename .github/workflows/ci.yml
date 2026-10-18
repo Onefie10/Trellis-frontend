@@ -41,5 +41,11 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Monitor domain invariants
+        run: npm run monitor:invariants -- --fail-on error
+
       - name: Build
         run: npm run build
+
+      - name: Check bundle budget and duplicate dependencies
+        run: npm run analyze:budget

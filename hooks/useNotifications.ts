@@ -1,7 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { notificationManager, NotificationPreferences, NotificationData } from '@/lib/notifications';
+import {
+  notificationManager,
+  NotificationPreferences,
+  NotificationData,
+  WebhookEndpoint,
+  EmailDigestPreferences,
+  WebhookEventTrigger,
+} from '@/lib/notifications';
 import { SorobanTransactionResult } from '@/lib/types';
 
 export interface UseNotificationsReturn {
@@ -13,6 +20,17 @@ export interface UseNotificationsReturn {
   // Preferences
   preferences: NotificationPreferences;
   
+  // Webhook management
+  webhooks: WebhookEndpoint[];
+  addWebhook: (webhookData: Omit<WebhookEndpoint, 'id' | 'createdAt'>) => WebhookEndpoint;
+  updateWebhook: (id: string, updates: Partial<WebhookEndpoint>) => WebhookEndpoint | null;
+  deleteWebhook: (id: string) => boolean;
+  triggerWebhooks: (event: WebhookEventTrigger, payloadData: Record<string, any>) => Promise<any>;
+
+  // Email Digest management
+  emailDigest: EmailDigestPreferences;
+  updateEmailDigest: (updates: Partial<EmailDigestPreferences>) => void;
+
   // Actions
   requestPermission: () => Promise<NotificationPermission>;
   updatePreferences: (updates: Partial<NotificationPreferences>) => void;
@@ -103,6 +121,35 @@ export function useNotifications(): UseNotificationsReturn {
     setPreferences(notificationManager.getPreferences());
   }, []);
 
+  const addWebhook = useCallback((webhookData: Omit<WebhookEndpoint, 'id' | 'createdAt'>) => {
+    const created = notificationManager.addWebhook(webhookData);
+    setPreferences(notificationManager.getPreferences());
+    return created;
+  }, []);
+
+  const updateWebhook = useCallback((id: string, updates: Partial<WebhookEndpoint>) => {
+    const updated = notificationManager.updateWebhook(id, updates);
+    setPreferences(notificationManager.getPreferences());
+    return updated;
+  }, []);
+
+  const deleteWebhook = useCallback((id: string) => {
+    const result = notificationManager.deleteWebhook(id);
+    setPreferences(notificationManager.getPreferences());
+    return result;
+  }, []);
+
+  const triggerWebhooks = useCallback(async (event: WebhookEventTrigger, payloadData: Record<string, any>) => {
+    const res = await notificationManager.triggerWebhooks(event, payloadData);
+    setPreferences(notificationManager.getPreferences());
+    return res;
+  }, []);
+
+  const updateEmailDigest = useCallback((updates: Partial<EmailDigestPreferences>) => {
+    notificationManager.updateEmailDigestPreferences(updates);
+    setPreferences(notificationManager.getPreferences());
+  }, []);
+
   const showNotification = useCallback(async (data: NotificationData) => {
     await notificationManager.showNotification(data);
   }, []);
@@ -159,6 +206,22 @@ export function useNotifications(): UseNotificationsReturn {
     // Preferences
     preferences,
     
+    // Webhook management
+    webhooks: preferences.webhooks || [],
+    addWebhook,
+    updateWebhook,
+    deleteWebhook,
+    triggerWebhooks,
+
+    // Email Digest management
+    emailDigest: preferences.emailDigest || {
+      enabled: false,
+      email: '',
+      frequency: 'daily',
+      triggers: { newProposal: true, highErrorRate: true, payoutExecuted: true, agentMinted: true },
+    },
+    updateEmailDigest,
+
     // Actions
     requestPermission,
     updatePreferences,

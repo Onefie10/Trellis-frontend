@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from 'react';
+import useFocusTrap from '@/components/useFocusTrap';
 
 export interface ImportProgress { processed: number; total: number; current_item?: string; errors: number; }
 
@@ -61,6 +62,7 @@ export default function ImportProgressModal({ open, payload, onComplete }: { ope
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [rollback, setRollback] = useState<ImportRollbackInfo | null>(null);
   const controller = useRef<AbortController | null>(null);
+  const trapRef = useFocusTrap<HTMLDivElement>({ active: open });
 
   async function start() {
     controller.current = new AbortController(); setStatus('running');
@@ -95,12 +97,22 @@ export default function ImportProgressModal({ open, payload, onComplete }: { ope
   if (!open) return null;
   const percentage = progress.total ? Math.round((progress.processed / progress.total) * 100) : 0;
   return (
-    <div role="dialog" aria-modal="true" aria-label="Import progress" className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4">
+    <div
+      ref={trapRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Import progress"
+      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
+    >
       <div className="w-full max-w-md rounded-2xl bg-white p-6 text-gray-900 shadow-xl">
-        <h2>Importing records</h2>
-        <p className="mt-2 text-sm text-gray-600">{status === 'idle' ? 'Ready to import.' : `${percentage}% complete`}</p>
+        <h2 className="text-lg font-semibold">Importing records</h2>
+        <p className="mt-2 text-sm text-gray-600">
+          {status === 'idle' ? 'Ready to import.' : `${percentage}% complete`}
+        </p>
         <progress className="mt-4 w-full" max="100" value={percentage} />
-        {progress.current_item && <p className="mt-2 truncate text-xs text-gray-500">{progress.current_item}</p>}
+        {progress.current_item && (
+          <p className="mt-2 truncate text-xs text-gray-500">{progress.current_item}</p>
+        )}
         {preview && (
           <div className="mt-4 rounded border p-3 text-xs">
             <p className="font-medium">Preview: {preview.accepted} accepted, {preview.quarantined} quarantined</p>
@@ -120,8 +132,22 @@ export default function ImportProgressModal({ open, payload, onComplete }: { ope
         )}
         <div className="mt-5 flex flex-wrap gap-2">
           <button type="button" onClick={handlePreview} disabled={status === 'running'} className="rounded border px-3 py-2 text-sm disabled:opacity-50">Preview</button>
-          <button type="button" onClick={start} disabled={status === 'running'} className="rounded bg-black px-3 py-2 text-sm text-white disabled:opacity-50">{status === 'complete' ? 'Imported' : 'Start import'}</button>
-          <button type="button" onClick={() => { controller.current?.abort(); setStatus('cancelled'); }} disabled={status !== 'running'} className="rounded border px-3 py-2 text-sm">Cancel</button>
+          <button
+            type="button"
+            onClick={start}
+            disabled={status === 'running'}
+            className="rounded bg-black px-3 py-2 text-sm text-white disabled:opacity-50"
+          >
+            {status === 'complete' ? 'Imported' : 'Start import'}
+          </button>
+          <button
+            type="button"
+            onClick={() => { controller.current?.abort(); setStatus('cancelled'); }}
+            disabled={status !== 'running'}
+            className="rounded border px-3 py-2 text-sm"
+          >
+            Cancel
+          </button>
           <button type="button" onClick={handleRollback} disabled={status === 'running'} className="rounded border px-3 py-2 text-sm disabled:opacity-50">Rollback guidance</button>
         </div>
       </div>

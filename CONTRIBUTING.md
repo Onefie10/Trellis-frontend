@@ -115,6 +115,8 @@ Types:
 - Test edge cases and error conditions
 - Use React Testing Library for component tests
 - Mock external API calls and blockchain interactions
+- **Local Fixtures:** Use the deterministic fixture generator (`lib/fixtures/generator.ts`) to produce stable, realistic mocked data for tests and local component development. Example usage: `new FixtureGenerator(42).generateAgent('normal')`. Scenarios such as `normal`, `edge`, and `failure` are supported for various domain types to ensure UI robustness without relying on brittle static data.
+- **Domain events:** If you publish or consume a `window` or cross-tab `BroadcastChannel` message, it must go through `lib/domain-events/`. Add the event to the catalog in `lib/domain-events/registry.ts`, then add a fixture case to `tests/fixtures/domain-events/valid-events.json`. Read [docs/DOMAIN_EVENTS.md](./docs/DOMAIN_EVENTS.md) before changing a payload shape.
 
 ## 🐛 Submitting Bug Reports
 
@@ -148,7 +150,20 @@ git checkout -b feature/your-feature-name
 ```bash
 npm run test
 npm run lint
+npm run monitor:invariants
 ```
+
+The monitor is read-only and runs in CI. If you changed a domain entity, its
+status enum, or an affiliate payout rule, run it locally first — a change that
+silently corrupts a fixture will fail the build. See
+[docs/INVARIANT_MONITORING.md](./docs/INVARIANT_MONITORING.md).
+npm run validate:events
+```
+
+`validate:events` replays the recorded event fixtures against the catalog and
+fails if a registered event has no fixture. Run it whenever you touch
+`lib/domain-events/` or any producer or consumer of a domain event. See
+[docs/DOMAIN_EVENTS.md](./docs/DOMAIN_EVENTS.md).
 
 4. Commit your changes using conventional commits
 
@@ -171,6 +186,7 @@ npm run lint
 - Document new features in the appropriate places
 - Add JSDoc comments for complex functions
 - Update setup instructions if requirements change
+- Update [docs/DOMAIN_EVENTS.md](./docs/DOMAIN_EVENTS.md) when an event name, payload schema, version, or compatibility guarantee changes
 
 ## 💬 Community
 

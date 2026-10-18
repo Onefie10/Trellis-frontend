@@ -25,6 +25,7 @@ const disconnectedData = {
   payoutRequests: [],
   program: null,
   earningsHistory: [],
+  clickMetrics: null,
   isLoading: false,
   error: null,
   requestPayout: jest.fn(),
@@ -96,5 +97,32 @@ describe('AffiliateDashboardPage wallet integration', () => {
     const { container } = render(<AffiliateDashboardPage />);
     expect(container).toBeTruthy();
     expect(requestPayout).not.toHaveBeenCalled();
+  });
+
+  it('renders referral CTR and conversion metrics on the dashboard', () => {
+    mockUseStellarWallet.mockReturnValue({
+      wallet: { publicKey: 'GABC', isConnected: true },
+    });
+    (useAffiliateData as jest.Mock).mockReturnValue({
+      ...connectedData,
+      clickMetrics: {
+        totalImpressions: 10,
+        totalClicks: 4,
+        totalConversions: 1,
+        clickThroughRate: 0.4,
+        conversionRate: 0.25,
+        bySource: [],
+        byDevice: [],
+        series: [
+          { date: '2026-09-21', impressions: 10, clicks: 4, conversions: 1, ctr: 0.4 },
+        ],
+      },
+    });
+
+    render(<AffiliateDashboardPage />);
+
+    expect(screen.getByText('Click-through Rate')).toBeInTheDocument();
+    expect(screen.getByText('40%')).toBeInTheDocument();
+    expect(screen.getByText('25%')).toBeInTheDocument();
   });
 });

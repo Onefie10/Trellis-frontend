@@ -27,3 +27,15 @@ The Trellis Lifecycle Notification System manages critical alerts, user actions,
 - `transaction_failed`: On-chain execution failure with retry / recovery link.
 - `recovery_action_required`: User action needed for wallet or contract state recovery.
 - `rate_limit_warning`: Notification when API or gas budget reaches threshold.
+
+---
+
+## Webhook Authentication & Security
+
+Inbound webhooks (e.g., from external providers or internal services) to the lifecycle route are cryptographically verified to prevent unauthorized events and replay attacks.
+
+### Verification Flow
+
+1. **Signature Verification**: The `x-webhook-signature` header must contain a valid HMAC-SHA256 signature, signed using `WEBHOOK_SECRET`. The signature is computed over the string `<timestamp>.<payload>`.
+2. **Replay Window**: The `x-webhook-timestamp` header is evaluated to ensure the webhook was sent recently (default maximum window: 5 minutes). Stale events are rejected.
+3. **Idempotency**: The `x-webhook-event-id` header is tracked. If the exact event ID is processed again, it is blocked as a duplicate.

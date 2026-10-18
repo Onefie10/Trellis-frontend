@@ -4,13 +4,17 @@ import { BonusSummary } from './BonusSummary';
 import { BonusBreakdown } from './BonusBreakdown';
 import { BonusChart } from './BonusChart';
 import { BonusNotifications } from './BonusNotifications';
+import { ImpermanentLossCalculator } from './ImpermanentLossCalculator';
+import { LiquidityPositions } from './LiquidityPositions';
+import { YieldCalculator } from './YieldCalculator';
 import { useBonusStore } from '@/store/useBonusStore';
 
 export const BonusDashboard: React.FC = () => {
-  const { fetchBonuses, simulateRealTimeBonus } = useBonusStore();
+  const { fetchBonuses, fetchLiquidityPositions, simulateRealTimeBonus } = useBonusStore();
 
   useEffect(() => {
     fetchBonuses();
+    fetchLiquidityPositions();
 
     // Simulate real-time updates every 30 seconds
     const interval = setInterval(() => {
@@ -18,7 +22,7 @@ export const BonusDashboard: React.FC = () => {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [fetchBonuses, simulateRealTimeBonus]);
+  }, [fetchBonuses, fetchLiquidityPositions, simulateRealTimeBonus]);
 
   return (
     <section className="mt-12">
@@ -27,7 +31,7 @@ export const BonusDashboard: React.FC = () => {
           <h2 className="text-3xl font-bold glow-text">Trading Bonuses</h2>
           <p className="text-gray-400">Real-time rewards for your trading activity</p>
         </div>
-        <button 
+        <button
           onClick={() => simulateRealTimeBonus()}
           className="px-4 py-2 bg-trellis-vine/20 border border-trellis-vine/50 rounded-lg text-sm hover:bg-trellis-vine/40 transition-all"
         >
@@ -36,8 +40,10 @@ export const BonusDashboard: React.FC = () => {
       </div>
 
       <BonusSummary />
+      
+      <YieldCalculator />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
         <div className="lg:col-span-2">
           <BonusChart />
         </div>
@@ -46,7 +52,12 @@ export const BonusDashboard: React.FC = () => {
         </div>
       </div>
 
+      <LiquidityPositions />
+
+      <ImpermanentLossCalculator />
+
       <BonusNotifications />
     </section>
   );
 };
+

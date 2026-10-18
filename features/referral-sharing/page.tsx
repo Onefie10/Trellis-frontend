@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useHasHydrated } from '@/store/persistence';
 import { useReferralStore } from '@/store/referralStore';
 import ReferralShareModal from './components/ReferralShareModal';
+import VanitySlugForm from './components/VanitySlugForm';
 import { 
   Box, 
   Typography, 
@@ -47,15 +49,18 @@ const ReferralDashboard: React.FC<ReferralDashboardProps> = ({ userId }) => {
     generateLink,
     claimReferralReward,
   } = useReferralStore();
+  const hasHydrated = useHasHydrated(useReferralStore);
 
   const [showShareModal, setShowShareModal] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
 
   useEffect(() => {
-    if (userId) {
-      void fetchReferralData(userId);
+    if (!hasHydrated || !userId) {
+      return;
     }
-  }, [userId, fetchReferralData]);
+
+    void fetchReferralData(userId);
+  }, [fetchReferralData, hasHydrated, userId]);
 
   const handleCopyLink = (url: string) => {
     navigator.clipboard.writeText(url);
@@ -77,7 +82,7 @@ const ReferralDashboard: React.FC<ReferralDashboardProps> = ({ userId }) => {
       .catch((err) => toast.error(err instanceof Error ? err.message : err));
   };
 
-  if (loading || !stats) {
+  if (!hasHydrated || loading || !stats) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
         <CircularProgress color="primary" />
@@ -159,6 +164,9 @@ const ReferralDashboard: React.FC<ReferralDashboardProps> = ({ userId }) => {
           </Grid>
         ))}
       </Grid>
+
+      {/* Custom vanity link registration (issue #128) */}
+      <VanitySlugForm userId={userId} />
 
       {/* Tabs Section */}
       <Paper

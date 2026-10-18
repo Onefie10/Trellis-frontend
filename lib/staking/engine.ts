@@ -6,8 +6,10 @@ import {
   StakeableAssetConfig,
   StakingPoolConfig,
   TokenInterface,
+  UnbondingRequest,
   isTokenInterface,
 } from "./types";
+import { calculateAPY } from "./apy";
 
 const DEFAULT_STAKE_MULTIPLIER = 1;
 
@@ -22,7 +24,7 @@ function toNumber(value: string | number): number {
 }
 
 function clonePosition(position: StakePosition | null | undefined): StakePosition | null {
-  return position ? { ...position } : null;
+  return position ? { ...position, unbondingRequests: position.unbondingRequests.map(r => ({ ...r })) } : null;
 }
 
 export function validateTokenInterfaces(
@@ -119,6 +121,11 @@ export class MultiAssetStakingEngine {
     return this.emissionForAsset(assetId);
   }
 
+  getAPY(assetId: string, rewardTokenPrice: number = 1, stakedTokenPrice: number = 1): number {
+    const pool = this.getPool(assetId);
+    return calculateAPY(pool.emissionPerSecond, pool.totalEffectiveStake, rewardTokenPrice, stakedTokenPrice);
+  }
+
   getPosition(userId: string, assetId: string): StakePosition | null {
     return clonePosition(this.positions.get(userId)?.get(assetId));
   }
@@ -197,7 +204,77 @@ export class MultiAssetStakingEngine {
     position.rewardDebt = position.effectiveStake * pool.accRewardPerShare;
     position.lastUpdatedAt = timestamp;
 
-    if (position.stakedAmount === 0 && position.pendingRewards === 0) {
+    const unbondingPeriodMs = asset.unbondingPeriodMs ?? 0;
+    position.unbondingRequests.push({
+      amount: unstakeAmount,
+      unlockTime: timestamp + unbondingPeriodMs
+    });
+
+    return {
+      userId,
+      assetId,
+      amount: unstakeAmount,
+      rewardClaimed: 0,
+      pendingRewards: position.pendingRewards,
+      position: clonePosition(this.getPosition(userId, assetId)),
+    };
+  }
+
+  claimUnbonded(
+    userId: string,
+    assetId: string,
+    timestamp = Date.now()
+  ): number {
+    const position = this.getExistingPosition(userId, assetId);
+    let claimable = 0;
+    const remaining: UnbondingRequest[] = [];
+    
+    for (const req of position.unbondingRequests) {
+      if (timestamp >= req.unlockTime) {
+        claimable += req.amount;
+      } else {
+        remaining.push(req);
+      }
+    }
+    
+    position.unbondingRequests = remaining;
+    
+    if (position.stakedAmount === 0 && position.pendingRewards === 0 && remaining.length === 0) {
+      this.positions.get(userId)?.delete(assetId);
+    }
+    
+    return claimable;
+  }
+
+  emergencyUnstake(
+    userId: string,
+    assetId: string,
+    amount: string | number,
+    timestamp = Date.now()
+  ): StakeActionResult & { penalty: number, amountReturned: number } {
+    const unstakeAmount = toNumber(amount);
+    const asset = this.getAsset(assetId);
+    const pool = this.syncPool(assetId, timestamp);
+    const position = this.getExistingPosition(userId, assetId);
+
+    this.accruePosition(position, pool);
+
+    if (unstakeAmount > position.stakedAmount) {
+      throw new Error(`Cannot unstake more than the deposited balance for ${assetId}`);
+    }
+
+    const effectiveStake = this.toEffectiveStake(asset, unstakeAmount);
+    position.stakedAmount -= unstakeAmount;
+    position.effectiveStake -= effectiveStake;
+    pool.totalEffectiveStake -= effectiveStake;
+    position.rewardDebt = position.effectiveStake * pool.accRewardPerShare;
+    position.lastUpdatedAt = timestamp;
+    
+    const penaltyRate = asset.emergencyPenaltyRate ?? 0;
+    const penalty = unstakeAmount * penaltyRate;
+    const amountReturned = unstakeAmount - penalty;
+
+    if (position.stakedAmount === 0 && position.pendingRewards === 0 && position.unbondingRequests.length === 0) {
       this.positions.get(userId)?.delete(assetId);
     }
 
@@ -208,6 +285,8 @@ export class MultiAssetStakingEngine {
       rewardClaimed: 0,
       pendingRewards: position.pendingRewards,
       position: clonePosition(this.getPosition(userId, assetId)),
+      penalty,
+      amountReturned
     };
   }
 
@@ -226,7 +305,7 @@ export class MultiAssetStakingEngine {
     position.rewardDebt = position.effectiveStake * pool.accRewardPerShare;
     position.lastUpdatedAt = timestamp;
 
-    if (position.stakedAmount === 0) {
+    if (position.stakedAmount === 0 && position.unbondingRequests.length === 0) {
       this.positions.get(userId)?.delete(assetId);
     }
 
@@ -271,6 +350,7 @@ export class MultiAssetStakingEngine {
       rewardDebt: 0,
       pendingRewards: 0,
       lastUpdatedAt: timestamp,
+      unbondingRequests: [],
     };
 
     userPositions.set(assetId, position);

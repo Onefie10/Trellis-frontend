@@ -13,6 +13,7 @@ export const useAffiliateData = (walletAddress: string | null) => {
     payoutRequests,
     program,
     earningsHistory,
+    clickMetrics,
     isLoading,
     error,
     fetchAffiliateData,
@@ -36,6 +37,7 @@ export const useAffiliateData = (walletAddress: string | null) => {
     payoutRequests,
     program,
     earningsHistory,
+    clickMetrics,
     isLoading,
     error,
 

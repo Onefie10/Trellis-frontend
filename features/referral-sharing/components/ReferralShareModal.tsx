@@ -27,6 +27,7 @@ import {
 import { ReferralLink } from '../types';
 import { ReferralService } from '../services/referralService';
 import { SocialShareService } from '../services/socialShareService';
+import SocialShareButton from './SocialShareButton';
 import { toast } from 'sonner';
 
 interface ReferralShareModalProps {
@@ -166,33 +167,35 @@ const ReferralShareModal: React.FC<ReferralShareModalProps> = ({
               <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2, fontWeight: 600 }}>Broadcast on Networks</Typography>
               <Grid container spacing={2}>
                 {[
-                  { icon: TwitterIcon, platform: 'twitter', label: 'X (Twitter)', color: '#1DA1F2' },
-                  { icon: FacebookIcon, platform: 'facebook', label: 'Facebook', color: '#1877F2' },
-                  { icon: WhatsAppIcon, platform: 'whatsapp', label: 'WhatsApp', color: '#25D366' }
-                ].map((s) => (
-                  <Grid size={4} key={s.platform}>
-                    <Box 
-                      onClick={() => shareOnSocial(s.platform)}
-                      sx={{ 
-                        p: 2, 
-                        borderRadius: '16px', 
-                        backgroundColor: 'rgba(255,255,255,0.03)', 
-                        border: '1px solid rgba(255,255,255,0.05)',
-                        textAlign: 'center',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        '&:hover': {
-                          backgroundColor: alpha(s.color, 0.1),
-                          borderColor: s.color,
-                          transform: 'translateY(-2px)'
-                        }
-                      }}
-                    >
-                      <s.icon sx={{ color: s.color, mb: 1 }} />
-                      <Typography variant="caption" sx={{ display: 'block', fontWeight: 600 }}>{s.label.split(' ')[0]}</Typography>
-                    </Box>
-                  </Grid>
-                ))}
+                  { platform: 'twitter' as const, label: 'X (Twitter)' },
+                  { platform: 'facebook' as const, label: 'Facebook' },
+                  { platform: 'linkedin' as const, label: 'LinkedIn' },
+                  { platform: 'whatsapp' as const, label: 'WhatsApp' },
+                  { platform: 'telegram' as const, label: 'Telegram' }
+                ].map((s) => {
+                  const shareUrl = new URL(referralLink.url);
+                  shareUrl.searchParams.set('utm_source', s.platform);
+                  shareUrl.searchParams.set('utm_medium', 'social');
+                  shareUrl.searchParams.set('utm_campaign', 'referral');
+
+                  const config = {
+                    platform: s.platform,
+                    url: shareUrl.toString(),
+                    title: `Join me on Trellis!`,
+                    description: `Discover amazing AI agents and earn ${referralLink.reward} when you sign up!`,
+                    hashtags: ['AI', 'Trellis', 'Stellar']
+                  };
+                  return (
+                    <Grid size={4} key={s.platform}>
+                      <SocialShareButton
+                        platform={s.platform}
+                        config={config}
+                        className="w-full"
+                        showLabel={false}
+                      />
+                    </Grid>
+                  );
+                })}
               </Grid>
             </Box>
           </Box>

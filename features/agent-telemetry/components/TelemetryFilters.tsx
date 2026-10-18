@@ -108,7 +108,7 @@ export function TelemetryFilters({ filters, onChange, caps, knownAgents }: Props
                   });
                 }}
               />
-              {s}
+              {s.toUpperCase()}
             </label>
           ))}
         </div>

@@ -1,0 +1,144 @@
+{
+  "issues": [
+    {
+      "number": 212,
+      "stage": 7,
+      "title": "Trellis Frontend: Implement Dead Letter Queue (DLQ) and exponential backoff retry worker for failed domain event handlers",
+      "labels": ["architecture", "enhancement", "realtime", "backend-integration"],
+      "body": "`lib/domain-events/consume.ts` processes incoming domain events, but if a subscriber handler throws an exception during event processing, the event is lost without retry or Dead Letter Queue (DLQ) storage.\n\n## Why this matters\nTransient network errors or temporary service outages should not cause loss of critical domain events (e.g. fund transfers, ownership changes, lifecycle mutations).\n\n## Tasks\n- [ ] Build Dead Letter Queue (DLQ) in `lib/domain-events/` to capture failed domain event payloads\n- [ ] Implement exponential backoff retry worker with configurable max retry attempts (e.g. 3 attempts with 2s, 4s, 8s backoff)\n- [ ] Add DLQ inspection UI on the operations dashboard allowing maintainers to inspect and manually replay failed events\n- [ ] Add unit tests in `tests/__tests__/domain-events.test.ts` verifying DLQ capture and retry backoff timing\n\n## Files to look at\n- `lib/domain-events/consume.ts`\n- `lib/domain-events/index.ts`\n- `docs/DOMAIN_EVENTS.md`\n\n## Acceptance criteria\n- Failed domain event consumer handlers retry with exponential backoff before moving to DLQ\n- Maintainers can inspect and re-trigger DLQ event payloads via the dashboard"
+    },
+    {
+      "number": 213,
+      "stage": 7,
+      "title": "Trellis Frontend: Add real-time webhook alert triggers for domain invariant monitoring violations",
+      "labels": ["telemetry", "enhancement", "security", "architecture"],
+      "body": "`lib/invariant-monitor/` continuously checks system invariants (funds, ownership, authorization, lifecycle), but only logs violation reports without triggering instant alert notifications to external maintainer channels.\n\n## Why this matters\nCritical invariant breaches (such as fund balance discrepancies or unauthorized ownership mutations) require instant alert dispatch to maintainers.\n\n## Tasks\n- [ ] Implement alert dispatcher in `lib/invariant-monitor/report.ts` supporting Webhooks (Slack, Discord, PagerDuty)\n- [ ] Add configurable severity threshold rules (Critical violations trigger immediate alerts, Minor warnings batch into daily digests)\n- [ ] Include violation diff context and affected record IDs in alert payload bodies\n- [ ] Add unit tests in `tests/__tests__/invariant-monitor.test.ts` verifying webhook alert payload generation\n\n## Files to look at\n- `lib/invariant-monitor/report.ts`\n- `lib/invariant-monitor/monitor.ts`\n- `docs/INVARIANT_MONITORING.md`\n\n## Acceptance criteria\n- Invariant violations trigger immediate outbound webhook alert payloads\n- High-severity breaches format clear diagnostic context for maintainer triage"
+    },
+    {
+      "number": 214,
+      "stage": 7,
+      "title": "Trellis Frontend: Build automated schema evolution compatibility tester for versioned domain events",
+      "labels": ["testing", "architecture", "developer-experience"],
+      "body": "`lib/domain-events/registry.ts` manages versioned event schemas, but lacks automated validation checking if schema updates introduce breaking changes (missing required fields, changed data types) against historic schema versions.\n\n## Why this matters\nPreventing breaking schema changes ensures backwards compatibility for event consumers across different deployed versions.\n\n## Tasks\n- [ ] Build automated schema compatibility checker in `scripts/validate-domain-events.ts`\n- [ ] Enforce backward/forward compatibility rules (forbidding removal of required fields, enforcing default values for new fields)\n- [ ] Wire schema evolution checks into `.github/workflows/ci.yml`\n- [ ] Add unit tests verifying breaking vs non-breaking schema evolution detection\n\n## Files to look at\n- `lib/domain-events/registry.ts`\n- `scripts/validate-domain-events.ts`\n- `tests/__tests__/domain-events.test.ts`\n\n## Acceptance criteria\n- Domain event schema updates are validated against historic version definitions in CI\n- Pull requests containing breaking schema changes fail CI verification"
+    },
+    {
+      "number": 215,
+      "stage": 7,
+      "title": "Trellis Frontend: Implement runtime secret rotation manager and environment variable sanitizer",
+      "labels": ["security", "enhancement", "architecture"],
+      "body": "`lib/config/env.ts` validates environment variables on startup, but does not support runtime secret rotation or sanitization of environment configurations leaked into client-side error tracebacks.\n\n## Why this matters\nSensitive API keys and connection tokens must be masked in client-side logs and supported with smooth secret rotation without server restarts.\n\n## Tasks\n- [ ] Implement secret sanitization mask in `lib/config/env.ts` redacting tokens from client tracebacks and logs\n- [ ] Add runtime secret rotation listener reloading non-static environment configuration variables dynamically\n- [ ] Add environment variable audit check flagging weak or default development secrets\n- [ ] Add unit tests in `lib/config/__tests__/env.test.ts` for secret masking and rotation logic\n\n## Files to look at\n- `lib/config/env.ts`\n- `scripts/validate-env.ts`\n- `.env.example`\n\n## Acceptance criteria\n- Environment tokens are masked with `[SECRET_MASKED]` in browser logs and error traces\n- Secret rotation updates dynamic environment config without requiring application rebuilds"
+    },
+    {
+      "number": 216,
+      "stage": 7,
+      "title": "Trellis Frontend: Add debounced URL query state serializer for marketplace multi-facet filters",
+      "labels": ["frontend", "ux", "performance"],
+      "body": "`app/marketplace/page.tsx` filters agent listings, but rapid user filter selections cause excessive browser history push states and sluggish URL query serialization.\n\n## Why this matters\nDebouncing and optimizing URL query parameter serialization provides smooth browser back/forward navigation and shareable filter URLs.\n\n## Tasks\n- [ ] Implement debounced URL state serializer hook in `app/marketplace/` using `use-debounce`\n- [ ] Compact multi-select array parameters into clean compressed query strings (`?cat=ai,audit&sort=top`)\n- [ ] Preserve filter state on page reload and browser back/forward navigation\n- [ ] Add unit tests for URL query parameter serialization and deserialization\n\n## Files to look at\n- `app/marketplace/page.tsx`\n- `features/agent-discovery/`\n- `store/searchStore.ts`\n\n## Acceptance criteria\n- Marketplace filter changes update URL search parameters smoothly without jank\n- Filter state is restored accurately when navigating via browser history buttons"
+    },
+    {
+      "number": 217,
+      "stage": 7,
+      "title": "Trellis Frontend: Build multi-signature transaction builder supporting threshold signers for Soroban DAO treasury",
+      "labels": ["blockchain", "stellar", "security", "governance"],
+      "body": "`features/governance/` supports single-key proposal execution, but lacks multi-signature transaction building and threshold signer collection for Soroban DAO treasury management.\n\n## Why this matters\nDAO treasury transfers require multi-signature approval (e.g. 3-of-5 signers) to prevent unauthorized fund movements.\n\n## Tasks\n- [ ] Build multi-sig transaction builder UI in `features/governance/` collecting multiple threshold signatures\n- [ ] Display pending signature collection progress (e.g., 2/3 required signatures gathered)\n- [ ] Export partially signed transaction envelopes (`XDR`) for off-chain co-signer review\n- [ ] Add unit tests for multi-sig threshold validation and signature aggregation\n\n## Files to look at\n- `features/governance/`\n- `lib/soroban/`\n- `lib/governance/`\n\n## Acceptance criteria\n- Treasury proposal execution supports gathering multiple required signer signatures\n- Partially signed transactions can be saved, shared, and completed by co-signers"
+    },
+    {
+      "number": 218,
+      "stage": 7,
+      "title": "Trellis Frontend: Implement WCAG 2.1 keyboard focus-trap manager for modals and drawer components",
+      "labels": ["accessibility", "frontend", "ux"],
+      "body": "Modal overlays and side-drawer components in `components/` do not consistently trap keyboard focus, allowing keyboard Tab navigation to escape into hidden background elements.\n\n## Why this matters\nKeyboard focus management is a critical WCAG 2.1 requirement for screen reader and keyboard-only users.\n\n## Tasks\n- [ ] Build focus-trap utility hook (`useFocusTrap`) in `components/` restricting Tab navigation within active dialogs\n- [ ] Automatically focus the primary input or close button when a modal opens\n- [ ] Restore previous element focus when the modal or drawer closes\n- [ ] Add automated Playwright keyboard navigation tests in `e2e/smoke.spec.ts`\n\n## Files to look at\n- `components/`\n- `features/`\n- `e2e/smoke.spec.ts`\n\n## Acceptance criteria\n- Keyboard Tab navigation is strictly trapped within open modal dialogs and drawers\n- Closing a dialog returns keyboard focus to the triggering UI element"
+    },
+    {
+      "number": 219,
+      "stage": 7,
+      "title": "Trellis Frontend: Add service worker version update prompt and immediate asset activation in PWA",
+      "labels": ["performance", "pwa", "frontend", "ux"],
+      "body": "`hooks/usePWA.ts` and `public/sw.js` handle service worker caching, but when a new deployment occurs, active users remain on outdated cached assets until all tabs are closed.\n\n## Why this matters\nPrompting users when a new application build is available ensures they benefit from latest features and security updates promptly.\n\n## Tasks\n- [ ] Add service worker update listener in `hooks/usePWA.ts` detecting `waiting` worker state\n- [ ] Render unobtrusive update banner ('New version available! Reload to update')\n- [ ] Trigger `skipWaiting()` and page reload when user accepts update prompt\n- [ ] Add unit tests in `tests/pwa-utils.test.ts` for service worker lifecycle event handling\n\n## Files to look at\n- `hooks/usePWA.ts`\n- `components/OfflineBanner.tsx`\n- `public/sw.js`\n\n## Acceptance criteria\n- Users receive an update banner when a new service worker build is waiting\n- Clicking reload activates the updated service worker and reloads the application"
+    },
+    {
+      "number": 220,
+      "stage": 7,
+      "title": "Trellis Frontend: Build IndexedDB database snapshot exporter and restore tool for offline state migration",
+      "labels": ["performance", "frontend", "developer-experience"],
+      "body": "`lib/cache-manager.ts` manages IndexedDB stores, but lacks tools for exporting database snapshots to JSON files or restoring state across browser profiles.\n\n## Why this matters\nSnapshot export/restore allows developers and users to backup offline drafts, telemetry logs, and local application state.\n\n## Tasks\n- [ ] Build IndexedDB database export utility in `lib/cache-manager.ts` dumping object stores to encrypted JSON\n- [ ] Build database restore tool with schema validation checking imported snapshot integrity\n- [ ] Add snapshot backup and restore UI in settings\n- [ ] Add unit tests in `tests/__tests__/cache-manager.test.ts` verifying export and restore fidelity\n\n## Files to look at\n- `lib/cache-manager.ts`\n- `app/settings/page.tsx`\n- `tests/__tests__/cache-manager.test.ts`\n\n## Acceptance criteria\n- Users can export IndexedDB storage snapshots as downloadable files\n- Restoring a snapshot reinstates offline drafts and cached state accurately"
+    },
+    {
+      "number": 221,
+      "stage": 7,
+      "title": "Trellis Frontend: Implement real-time log stream search and regex filter controls in agent telemetry",
+      "labels": ["telemetry", "realtime", "frontend", "ux"],
+      "body": "`app/telemetry/` displays real-time agent execution logs, but lacks live text search and regular expression (regex) filtering for isolating error lines during execution.\n\n## Why this matters\nDuring high-volume agent runs, log streams scroll rapidly, making manual error inspection difficult without live regex filtering.\n\n## Tasks\n- [ ] Add live log filter input in `app/telemetry/` supporting plain text and regex pattern matching\n- [ ] Highlight matching search terms in the log viewer with step-to-step match navigation\n- [ ] Add severity filter toggles (INFO, WARN, ERROR, DEBUG)\n- [ ] Add unit tests for log stream filtering performance under 10,000+ line workloads\n\n## Files to look at\n- `app/telemetry/page.tsx`\n- `features/agent-telemetry/`\n\n## Acceptance criteria\n- Telemetry log stream filters in real-time based on active regex patterns without freezing UI\n- Search term matches are visually highlighted with previous/next navigation buttons"
+    },
+    {
+      "number": 222,
+      "stage": 7,
+      "title": "Trellis Frontend: Add synthetic ping probes and latency tracking for external Stellar ecosystem services",
+      "labels": ["telemetry", "stellar", "enhancement", "architecture"],
+      "body": "`lib/operational-health.ts` monitors local state but lacks background synthetic ping probes measuring response latency to external services (Horizon, Soroban RPC, IPFS gateways, Algolia).\n\n## Why this matters\nProactive synthetic probing detects regional network degradation or third-party outage before users experience failed operations.\n\n## Tasks\n- [ ] Implement synthetic HTTP/RPC ping probe runner in `lib/operational-health.ts` polling external APIs periodically\n- [ ] Record rolling p50/p95/p99 response latency metrics for each service\n- [ ] Expose health probe metrics to status page endpoint `/api/operational-health`\n- [ ] Add unit tests in `tests/__tests__/operational-health.test.ts` for probe timeout handling\n\n## Files to look at\n- `lib/operational-health.ts`\n- `app/api/operational-health/route.ts`\n- `tests/__tests__/operational-health.test.ts`\n\n## Acceptance criteria\n- Background probes track rolling p50/p95 response latencies for Horizon, Soroban RPC, and IPFS\n- High latency or timeouts trigger degraded status indicators for affected sub-services"
+    },
+    {
+      "number": 223,
+      "stage": 7,
+      "title": "Trellis Frontend: Build maintainer PDF and CSV operational report generator in analytics dashboard",
+      "labels": ["analytics", "dashboard", "developer-experience", "enhancement"],
+      "body": "`app/dashboard/operations/page.tsx` renders operational charts, but maintainers cannot export formatted PDF summary reports or raw CSV metrics for external stakeholder reporting.\n\n## Why this matters\nMaintainers need printable executive summaries and raw metric data for governance reviews and monthly uptime reporting.\n\n## Tasks\n- [ ] Integrate client-side PDF document generator (e.g. `@react-pdf/renderer` or `jspdf`) in `app/dashboard/operations/`\n- [ ] Format executive operational report including uptime stats, error trends, and top failing routes\n- [ ] Add CSV export button downloading raw time-series metric data\n- [ ] Add unit tests for report data aggregation and CSV formatting\n\n## Files to look at\n- `app/dashboard/operations/page.tsx`\n- `features/analytics/`\n- `lib/operational-health.ts`\n\n## Acceptance criteria\n- Maintainers can generate and download printable PDF operational health reports\n- Raw metric data exports cleanly as structured CSV files"
+    },
+    {
+      "number": 224,
+      "stage": 7,
+      "title": "Trellis Frontend: Implement double-submit cookie anti-CSRF protection middleware for App Router mutations",
+      "labels": ["security", "backend-integration", "architecture"],
+      "body": "App Router API endpoints in `app/api/` process state mutations, but lack double-submit cookie Anti-CSRF token verification for state-changing HTTP requests (`POST`, `PUT`, `DELETE`).\n\n## Why this matters\nAnti-CSRF protection prevents unauthorized cross-site requests from executing actions on behalf of authenticated users.\n\n## Tasks\n- [ ] Implement Anti-CSRF double-submit cookie middleware in `lib/security/` generating cryptographically secure tokens\n- [ ] Include `X-CSRF-Token` header requirement on mutation endpoints in `lib/api.ts`\n- [ ] Reject requests with invalid or missing CSRF tokens with HTTP 403 Forbidden\n- [ ] Add unit tests verifying CSRF token generation, header validation, and rejection paths\n\n## Files to look at\n- `lib/api.ts`\n- `lib/security/`\n- `app/api/`\n\n## Acceptance criteria\n- API mutation endpoints require valid `X-CSRF-Token` headers matching secure double-submit cookies\n- Unauthorized cross-site requests missing valid tokens are rejected with HTTP 403 status"
+    },
+    {
+      "number": 225,
+      "stage": 7,
+      "title": "Trellis Frontend: Build on-chain proposal execution history timeline with Soroban transaction block links",
+      "labels": ["blockchain", "governance", "stellar", "frontend"],
+      "body": "`features/governance/` lists proposals but does not render a detailed execution audit timeline linking each lifecycle step to its corresponding Soroban ledger transaction block.\n\n## Why this matters\nComplete transaction transparency allows DAO members to audit proposal creation, voting, queueing, and execution on Stellar block explorers.\n\n## Tasks\n- [ ] Build interactive execution timeline component in `features/governance/` showing proposal progression\n- [ ] Link each proposal event to block explorer transaction URLs (StellarExpert, Stellar.org Explorer)\n- [ ] Display transaction gas fees, ledger sequence numbers, and contract event logs\n- [ ] Add unit tests for explorer URL formatting and transaction status parsing\n\n## Files to look at\n- `features/governance/`\n- `app/governance/`\n- `lib/stellar-constants.ts`\n\n## Acceptance criteria\n- Proposal detail views render a step-by-step on-chain audit timeline\n- Every execution step links directly to verified block explorer transaction records"
+    },
+    {
+      "number": 226,
+      "stage": 7,
+      "title": "Trellis Frontend: Add distributed idempotency key collision telemetry and retry frequency tracking",
+      "labels": ["telemetry", "performance", "architecture"],
+      "body": "`lib/idempotency.ts` handles request deduplication but does not collect telemetry on idempotency key collision rates, duplicate submission frequencies, or retry patterns.\n\n## Why this matters\nTracking duplicate request frequencies helps maintainers identify UI double-submit bugs and network retry storms.\n\n## Tasks\n- [ ] Add idempotency telemetry counters (`idempotency_hits`, `idempotency_collisions`) in `lib/idempotency.ts`\n- [ ] Export collision metrics to the operational health and metrics store\n- [ ] Render duplicate request rate warning graph on the maintainer operations dashboard\n- [ ] Add unit tests in `tests/__tests__/idempotency.test.ts` verifying telemetry counter increments\n\n## Files to look at\n- `lib/idempotency.ts`\n- `lib/metric-definitions.ts`\n- `lib/tests/idempotency.test.ts`\n\n## Acceptance criteria\n- Duplicate request attempts trigger idempotency collision telemetry metric updates\n- Operations dashboard charts idempotency key hit rates over time"
+    },
+    {
+      "number": 227,
+      "stage": 7,
+      "title": "Trellis Frontend: Build mock Soroban storage state stubber for interactive agent sandbox testing",
+      "labels": ["testing", "blockchain", "sandbox", "developer-experience"],
+      "body": "`features/sandbox/` enables mock contract execution but does not allow developers to stub Soroban instance, persistent, or temporary ledger storage keys during testing.\n\n## Why this matters\nDevelopers need to test agent frontend components under specific contract storage states (e.g., paused contracts, custom admin keys, low reserve balances).\n\n## Tasks\n- [ ] Build interactive Soroban storage state editor in `features/sandbox/` supporting `Instance`, `Persistent`, and `Temporary` storage types\n- [ ] Serialize user-defined key-value storage stubs into mock RPC contract data\n- [ ] Save and load custom storage stub presets for recurring test scenarios\n- [ ] Add unit tests in `features/sandbox/__tests__/sandbox.test.ts` for storage stubbing\n\n## Files to look at\n- `features/sandbox/`\n- `lib/sandbox-adapters.ts`\n- `lib/sandbox-fixtures.ts`\n\n## Acceptance criteria\n- Developers can inject custom Soroban storage state key-values into sandbox test runs\n- Storage stubs can be exported and imported as shareable JSON fixtures"
+    },
+    {
+      "number": 228,
+      "stage": 7,
+      "title": "Trellis Frontend: Implement incremental search index updater for agent metadata mutations",
+      "labels": ["performance", "frontend", "architecture"],
+      "body": "`lib/search-indexing.ts` indexes agent metadata for search, but re-indexes the entire agent dataset on minor metadata updates, leading to CPU lag on large marketplace catalogs.\n\n## Why this matters\nIncremental search indexing updates only modified agent records, maintaining fast search responsiveness with minimal CPU overhead.\n\n## Tasks\n- [ ] Implement single-record incremental index updater in `lib/search-indexing.ts` (`updateRecord`, `deleteRecord`)\n- [ ] Add diff detector checking modified fields before triggering re-indexing\n- [ ] Add unit tests in `tests/lib/search-indexing.test.ts` for incremental indexing vs full re-indexing\n\n## Files to look at\n- `lib/search-indexing.ts`\n- `tests/lib/search-indexing.test.ts`\n- `store/searchStore.ts`\n\n## Acceptance criteria\n- Modifying an agent metadata record updates only that record's search index entry\n- Full index rebuilds are avoided during routine single-agent updates"
+    },
+    {
+      "number": 229,
+      "stage": 7,
+      "title": "Trellis Frontend: Add notification grouping and threaded event consolidation in NotificationCenter",
+      "labels": ["frontend", "ux", "enhancement"],
+      "body": "`components/notifications/NotificationCenter.tsx` displays individual alerts, but when multiple related events occur (e.g. 10 rapid telemetry warnings), the notification list becomes flooded.\n\n## Why this matters\nGrouping related notifications into collapsible event threads keeps the notification inbox clean and organized.\n\n## Tasks\n- [ ] Implement notification thread grouping algorithm in `components/notifications/NotificationCenter.tsx` grouping by event category and source ID\n- [ ] Render collapsible thread cards (e.g. '5 Telemetry Warnings - click to expand')\n- [ ] Add 'Mark Thread as Read' action button\n- [ ] Add unit tests for notification array grouping and deduplication\n\n## Files to look at\n- `components/notifications/NotificationCenter.tsx`\n- `components/notifications/NotificationCenter.tsx`\n- `lib/notifications.ts`\n\n## Acceptance criteria\n- Rapid repetitive notifications from the same source group automatically into collapsible threads\n- Users can expand threads to inspect individual alert details or dismiss the entire group"
+    },
+    {
+      "number": 230,
+      "stage": 7,
+      "title": "Trellis Frontend: Build custom hotkey manager and keyboard shortcut configuration in settings",
+      "labels": ["frontend", "ux", "developer-experience"],
+      "body": "`app/settings/` provides user settings, but does not allow power users or developers to configure custom keyboard hotkeys for frequent actions (e.g. `/` to search, `g+d` to dashboard, `g+m` to marketplace).\n\n## Why this matters\nKeyboard shortcuts accelerate navigation for power users, maintainers, and developers managing marketplace operations.\n\n## Tasks\n- [ ] Build global hotkey manager in `app/settings/` using `mousetrap` or native keydown listener hook\n- [ ] Add customizable keyboard shortcut map for primary navigation and search actions\n- [ ] Render keyboard shortcut cheatsheet modal (`?` key overlay)\n- [ ] Add unit tests verifying hotkey trigger registration and input element suppression\n\n## Files to look at\n- `app/settings/`\n- `components/Navigation.tsx`\n- `components/`\n\n## Acceptance criteria\n- Users can trigger primary application actions via customizable keyboard shortcuts\n- Pressing `?` opens an interactive keyboard shortcut cheatsheet modal overlay"
+    },
+    {
+      "number": 231,
+      "stage": 7,
+      "title": "Trellis Frontend: Add network chaos simulation suite to E2E tests for testing latency and packet drop resilience",
+      "labels": ["test", "ci", "performance"],
+      "body": "`e2e/journey.spec.ts` tests user flows under ideal network conditions, but does not test application resilience under simulated high latency, HTTP 500 errors, or packet loss.\n\n## Why this matters\nAutomated network chaos testing verifies that fallback UIs, retries, and error boundaries function correctly during real-world network instability.\n\n## Tasks\n- [ ] Add Playwright route interceptor chaos utility in `e2e/` introducing artificial delay (500ms-3000ms) and random HTTP 5xx errors\n- [ ] Add chaos test scenarios verifying loading skeletons, retry buttons, and error boundaries\n- [ ] Include chaos testing suite execution in `.github/workflows/e2e.yml`\n- [ ] Add acceptance assertion ensuring no unhandled React error boundary crashes occur under chaos conditions\n\n## Files to look at\n- `e2e/journey.spec.ts`\n- `e2e/smoke.spec.ts`\n- `playwright.config.ts`\n\n## Acceptance criteria\n- E2E chaos tests verify application UI stability under simulated network delays and API failures\n- Unhandled exceptions or blank screen crashes during chaos conditions fail the test suite"
+    }
+  ]
+}

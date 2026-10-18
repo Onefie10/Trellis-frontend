@@ -261,7 +261,13 @@ cp .env.example .env.local
 NEXT_PUBLIC_API_URL=http://localhost:3001
 NEXT_PUBLIC_ENVIRONMENT=development
 NEXT_PUBLIC_STELLAR_NETWORK=testnet
+# Optional feature flag: true or false
+NEXT_PUBLIC_ENABLE_BETA_FEATURES=false
 ```
+
+`npm run dev`, `npm run build`, and `npm start` validate configuration before starting. Run `npm run validate:env` to check it directly. Errors name the invalid setting but never print configured values. Local development may use HTTP and Stellar testnet. Staging and production require an HTTPS API URL and Stellar mainnet. Configure a unique, random `WEBHOOK_SECRET` of at least 32 characters only when webhook signing is enabled; placeholder and production-like secrets are rejected in local development. Keep server secrets out of `NEXT_PUBLIC_*` variables.
+
+For staging, set `NEXT_PUBLIC_ENVIRONMENT=staging`; for production, set `NEXT_PUBLIC_ENVIRONMENT=production`. Both deployment environments must provide their own HTTPS `NEXT_PUBLIC_API_URL` and set `NEXT_PUBLIC_STELLAR_NETWORK=mainnet`. Feature flags accept only `true` or `false`.
 
 #### 4. Run Contributor Diagnostics
 
@@ -303,6 +309,40 @@ npm run test:watch
 
 # Coverage report
 npm run test:coverage
+```
+
+#### 7. Disaster Recovery Domain Validation
+
+```bash
+# Validate core domain invariants (read-only)
+npm run validate:invariants
+
+# Validate restored snapshot file
+npm run validate:invariants -- --file /path/to/snapshot.json
+
+# See docs/DISASTER_RECOVERY.md for failure interpretation and escalation workflows
+```
+
+#### 8. Invariant Monitoring
+
+Continuously check the critical funds, ownership, lifecycle, and authorization
+invariants against a dataset snapshot. Read-only: it reports findings, it never
+repairs them.
+
+```bash
+# Monitor the bundled healthy baseline
+npm run monitor:invariants
+
+# Monitor a specific snapshot, machine-readable
+npm run monitor:invariants -- --file /path/to/snapshot.json --json
+
+# Treat warnings as failures, and narrow the run while investigating
+npm run monitor:invariants -- --strict --domain funds
+
+# List the registered invariants
+npm run monitor:invariants -- --list
+
+# See docs/INVARIANT_MONITORING.md for the full registry and remediation guidance
 ```
 
 ### Docker Setup (Optional)
@@ -626,6 +666,11 @@ git push origin feature/your-feature
 - **[Stellar Integration](./STELLAR_WALLET_INTEGRATION.md)** - Wallet setup
 - **[PWA Guide](./docs/PWA_IMPLEMENTATION.md)** - Progressive Web App
 - **[Metrics Dashboard](./docs/metrics-dashboard.md)** - Telemetry & monitoring
+- **[Retry & Dead Letters](./docs/retry-and-dead-letter.md)** - Retry policies, backoff, and operator runbook
+- **[Idempotency](./docs/idempotency.md)** - Making retried writes safe
+- **[Permission Matrix](./docs/PERMISSIONS.md)** - Roles, scopes, privileged actions, and how to guard a route
+- **[Invariant Monitoring](./docs/INVARIANT_MONITORING.md)** - Funds, ownership, lifecycle & authorization checks
+- **[Domain Events](./docs/DOMAIN_EVENTS.md)** - Versioned event schemas, producer validation & consumer compatibility
 
 ---
 

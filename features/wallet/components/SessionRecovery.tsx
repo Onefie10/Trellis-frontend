@@ -24,7 +24,7 @@ export default function SessionRecovery() {
   return (
     <div className="p-6 rounded-xl border border-trellis-vine/20 nebula-bg space-y-4">
       <div className="flex items-center gap-3">
-        <span className="text-2xl">🔄</span>
+        <span className="text-2xl" aria-hidden="true">🔄</span>
         <div>
           <h2 className="text-xl font-bold text-white">Session Recovery</h2>
           <p className="text-xs text-gray-500">Restore your linked wallets and active session from local encrypted storage.</p>
@@ -33,14 +33,20 @@ export default function SessionRecovery() {
 
       <div className="flex flex-col gap-3">
         <button
+          type="button"
           onClick={handleRecover}
           disabled={recovering}
-          className="w-full py-2 bg-trellis-ground/50 border border-trellis-vine/30 rounded-lg text-sm font-bold hover:bg-trellis-vine/10 transition-smooth disabled:opacity-50"
+          aria-busy={recovering}
+          className="w-full py-2 bg-trellis-ground/50 border border-trellis-vine/30 rounded-lg text-sm font-bold hover:bg-trellis-vine/10 transition-smooth motion-reduce:transition-none disabled:opacity-50"
         >
           {recovering ? "Recovering..." : "Recover Previous Session"}
         </button>
         {message && (
-          <p className={`text-xs text-center font-bold ${message.includes("success") ? "text-emerald-400" : "text-rose-400"}`}>
+          <p
+            role={message.includes("success") ? "status" : "alert"}
+            aria-live={message.includes("success") ? "polite" : "assertive"}
+            className={`text-xs text-center font-bold ${message.includes("success") ? "text-emerald-400" : "text-rose-400"}`}
+          >
             {message}
           </p>
         )}

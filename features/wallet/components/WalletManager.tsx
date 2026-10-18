@@ -1,16 +1,31 @@
 "use client";
 
-import React from "react";
+import React, { useCallback, useState } from "react";
 import { useStellarWallet } from "@/components/context/StellarWalletProvider";
 import { truncateStellarAddress } from "@/lib/stellar";
 import { LinkedWallet } from "@/lib/wallet/types";
+import LedgerConnectModal from "@/features/wallet/components/LedgerConnectModal";
 
 export default function WalletManager() {
   const { wallet, linkedWallets, linkWallet, unlinkWallet, connectWallet } = useStellarWallet();
+  const [showLedgerModal, setShowLedgerModal] = useState(false);
 
   const handleLink = async (type: "freighter" | "albedo" | "ledger") => {
+    if (type === "ledger") {
+      // Hardware wallets get the guided WebHID flow, which also shows the derived
+      // address on the device screen before it is linked.
+      setShowLedgerModal(true);
+      return;
+    }
     await linkWallet(type);
   };
+
+  // The Ledger dialog already holds the open device session, so linking reuses it
+  // instead of prompting on the device a second time.
+  const handleLedgerConnected = useCallback(async () => {
+    await linkWallet("ledger");
+    setShowLedgerModal(false);
+  }, [linkWallet]);
 
   return (
     <div className="p-6 rounded-xl border border-trellis-vine/20 nebula-bg space-y-6">
@@ -28,6 +43,13 @@ export default function WalletManager() {
             className="px-3 py-1.5 bg-trellis-vine/10 border border-trellis-vine/30 rounded-lg text-xs hover:bg-trellis-vine/20 transition-smooth"
           >
             + Link Albedo
+          </button>
+          <button
+            onClick={() => handleLink("ledger")}
+            title="Sign with a Ledger hardware wallet over WebHID"
+            className="px-3 py-1.5 bg-trellis-vine/10 border border-trellis-vine/30 rounded-lg text-xs hover:bg-trellis-vine/20 transition-smooth"
+          >
+            + Link Ledger
           </button>
         </div>
       </div>
@@ -78,6 +100,12 @@ export default function WalletManager() {
           ))
         )}
       </div>
+
+      <LedgerConnectModal
+        open={showLedgerModal}
+        onClose={() => setShowLedgerModal(false)}
+        onConnected={handleLedgerConnected}
+      />
     </div>
   );
 }

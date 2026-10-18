@@ -7,6 +7,7 @@ import { AnalyticsDataset } from "@/lib/analytics/types";
 import { useState } from "react";
 import Button from "@/components/Button";
 import { analyticsToCsv } from "@/lib/analytics/csv";
+import PrivacyAuditPanel from "@/features/analytics/PrivacyAuditPanel";
 
 export default function AnalyticsDashboard() {
   const [range, setRange] = useState("7d");
@@ -47,6 +48,8 @@ export default function AnalyticsDashboard() {
         <p className="text-gray-300 text-lg">
           View real-time and historical performance metrics for your agents.
         </p>
+
+        <PrivacyAuditPanel />
 
         <div className="flex gap-4">
           {(["7d", "30d", "90d", "1y"] as const).map((r) => (

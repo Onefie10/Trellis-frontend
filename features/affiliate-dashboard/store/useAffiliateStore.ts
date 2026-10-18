@@ -6,6 +6,7 @@ import {
   PayoutRequest,
   AffiliateProgram,
   EarningsHistory,
+  ReferralClickMetrics,
 } from '../types';
 import { affiliateService } from '../services/affiliateService';
 import {
@@ -22,6 +23,8 @@ interface AffiliateStore {
   payoutRequests: PayoutRequest[];
   program: AffiliateProgram | null;
   earningsHistory: EarningsHistory[];
+  /** CTR / conversion metrics for the wallet's vanity links (#128). */
+  clickMetrics: ReferralClickMetrics | null;
   isLoading: boolean;
   error: string | null;
 
@@ -64,6 +67,7 @@ export const useAffiliateStore = create<AffiliateStore>((set, get) => ({
   payoutRequests: [],
   program: null,
   earningsHistory: [],
+  clickMetrics: null,
   isLoading: false,
   error: null,
 
@@ -74,13 +78,15 @@ export const useAffiliateStore = create<AffiliateStore>((set, get) => ({
         throw new Error('Wallet address required');
       }
 
-      const [stats, referrals, payoutRequests, program, earningsHistory] = await Promise.all([
-        affiliateService.getStats(walletAddress),
-        affiliateService.getReferrals(walletAddress),
-        affiliateService.getPayoutRequests(walletAddress),
-        affiliateService.getProgram(),
-        affiliateService.getEarningsHistory(walletAddress),
-      ]);
+      const [stats, referrals, payoutRequests, program, earningsHistory, clickMetrics] =
+        await Promise.all([
+          affiliateService.getStats(walletAddress),
+          affiliateService.getReferrals(walletAddress),
+          affiliateService.getPayoutRequests(walletAddress),
+          affiliateService.getProgram(),
+          affiliateService.getEarningsHistory(walletAddress),
+          affiliateService.getReferralClickMetrics(walletAddress),
+        ]);
 
       set({
         stats,
@@ -89,6 +95,7 @@ export const useAffiliateStore = create<AffiliateStore>((set, get) => ({
         payoutRequests,
         program,
         earningsHistory,
+        clickMetrics,
         isLoading: false,
       });
     } catch (error) {

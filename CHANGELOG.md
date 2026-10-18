@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Quadratic voting weight calculator (`Math.sqrt(staked_balance)`) and Sybil-resistance verification checks in DAO governance (`features/governance/`, `lib/governance/`) (#126)
+- Side-by-side linear vs quadratic vote comparison cards and distribution graphs on proposal detail views (#126)
 - Idempotency for high-risk writes: `lib/idempotency.ts` plus `apiClient.postIdempotent`, wired into payout requests and reward claims, with conflict/expiry errors and a documented server contract (`docs/idempotency.md`)
 - Comprehensive open-source documentation and contributing guidelines
 - GitHub issue and PR templates

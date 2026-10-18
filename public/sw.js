@@ -92,7 +92,6 @@ self.addEventListener('install', (event) => {
     ])
     .then(() => {
       console.log('[SW] Installation completed successfully');
-      return self.skipWaiting();
     })
     .catch(error => {
       console.error('[SW] Installation failed:', error);
@@ -485,40 +484,91 @@ async function handleCacheFirst(request, cacheName, maxAgeSeconds) {
   }
 }
 
-// Background sync for offline actions
+// Background sync for offline actions.
+//
+// The offline submission queue itself lives in the page (see
+// `lib/pwa-utils.ts`), because only a page context can build authenticated
+// requests and report the outcome to the UI. The service worker's job here is
+// to wake that page up when the browser regains connectivity and to wait until
+// the replay has been acknowledged, so a failed replay is retried by the
+// browser instead of being silently dropped.
+const OFFLINE_QUEUE_SYNC_TAG = 'offline-submissions';
+const OFFLINE_QUEUE_FLUSH_MESSAGE = 'SYNC_OFFLINE_QUEUE';
+const OFFLINE_QUEUE_FLUSHED_MESSAGE = 'OFFLINE_QUEUE_FLUSHED';
+const OFFLINE_QUEUE_FLUSH_TIMEOUT_MS = 30000;
+
 self.addEventListener('sync', (event) => {
   if (event.tag === 'background-sync') {
     event.waitUntil(doBackgroundSync());
+  } else if (event.tag === OFFLINE_QUEUE_SYNC_TAG) {
+    event.waitUntil(syncOfflineSubmissions());
   } else if (event.tag === 'cache-warm') {
     event.waitUntil(warmupCache());
   }
 });
 
+/**
+ * Ask every open tab to replay its queued submissions. Resolves once at least
+ * one tab has confirmed the replay; rejects (so the browser retries later) when
+ * no tab could acknowledge it, and resolves quietly when no tab is open - the
+ * queue stays durable in page storage and is flushed on the next `online` event.
+ */
+async function syncOfflineSubmissions() {
+  console.log('[SW] Background sync: replaying offline submissions');
+
+  const clientList = await clients.matchAll({
+    type: 'window',
+    includeUncontrolled: true
+  });
+
+  if (clientList.length === 0) {
+    console.log('[SW] No client available to replay offline submissions');
+    return;
+  }
+
+  const results = await Promise.all(clientList.map((client) => requestQueueFlush(client)));
+  const acknowledged = results.filter((result) => result !== null);
+
+  if (acknowledged.length === 0) {
+    throw new Error('Offline submission flush was not acknowledged');
+  }
+
+  console.log('[SW] Offline submissions replayed:', JSON.stringify(acknowledged));
+}
+
+/**
+ * Post the flush request to one client and resolve with its acknowledgement
+ * (`null` when the client does not answer in time).
+ */
+function requestQueueFlush(client) {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    const timeout = setTimeout(() => resolve(null), OFFLINE_QUEUE_FLUSH_TIMEOUT_MS);
+
+    channel.port1.onmessage = (event) => {
+      clearTimeout(timeout);
+      const data = event.data || {};
+      resolve(data.type === OFFLINE_QUEUE_FLUSHED_MESSAGE ? data.result : null);
+    };
+
+    client.postMessage({ type: OFFLINE_QUEUE_FLUSH_MESSAGE }, [channel.port2]);
+  });
+}
+
 async function doBackgroundSync() {
   console.log('[SW] Performing background sync');
   
   try {
-    // Sync any pending API requests stored in IndexedDB
-    const pendingRequests = await getPendingRequests();
-    
-    for (const request of pendingRequests) {
-      try {
-        const response = await fetch(request.url, request.options);
-        if (response.ok) {
-          await removePendingRequest(request.id);
-          console.log('[SW] Synced request:', request.url);
-        }
-      } catch (error) {
-        console.error('[SW] Failed to sync request:', request.url, error);
-      }
-    }
-    
-    // Preload critical assets
+    // Replay offline submissions first so user-visible mutations land quickly.
+    await syncOfflineSubmissions();
+
+    // Then refresh the app shell for the next offline visit.
     await warmupCache();
     
     console.log('[SW] Background sync completed');
   } catch (error) {
     console.error('[SW] Background sync failed:', error);
+    throw error;
   }
 }
 
@@ -602,17 +652,13 @@ async function cleanupCache(cacheName, maxEntries) {
   console.log(`[SW] Cleaned up ${entriesToRemove.length} old entries from ${cacheName}`);
 }
 
-// IndexedDB utilities for pending requests
-async function getPendingRequests() {
-  // This would typically use IndexedDB to store pending requests
-  // For now, return empty array
-  return [];
-}
-
-async function removePendingRequest(id) {
-  // Remove request from IndexedDB
-  console.log('[SW] Removed pending request:', id);
-}
+// Offline submission queue ownership
+//
+// The queue is persisted by the page (`lib/pwa-utils.ts`,
+// `trellis.offline-submissions.v1` in localStorage) so it survives reloads,
+// can be inspected by the UI and can replay requests with the user's auth
+// headers. This worker only triggers the replay via the `sync` event / the
+// `SYNC_OFFLINE_QUEUE` message, which is why there is no IndexedDB queue here.
 
 // Push notifications with enhanced functionality
 self.addEventListener('push', (event) => {

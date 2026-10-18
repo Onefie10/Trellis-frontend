@@ -1,3 +1,4 @@
+import { webcrypto } from 'crypto';
 import {
   canonicalize,
   canonicalJSON,
@@ -7,6 +8,13 @@ import {
   normalizeLegacyRecord,
   isCanonicalizable,
   getCanonicalizeError,
+  jcsCanonicalize,
+  canonicalJSONJCS,
+  canonicalJSONBytes,
+  hashCanonicalPayload,
+  domainSeparatedCanonicalJSONBytes,
+  hashDomainSeparatedPayload,
+  JCSUnsupportedTypeError,
 } from '@/lib/canonicalization';
 
 describe('Canonicalization', () => {
@@ -266,5 +274,141 @@ describe('Canonicalization', () => {
       expect(normalized).toBeDefined();
       expect(typeof normalized).toBe('object');
     });
+  });
+});
+
+describe('RFC 8785 JSON Canonicalization Scheme (JCS)', () => {
+  // Reference vector from RFC 8785 (JSON Canonicalization Scheme).
+  const RFC8785_INPUT = String.raw`{"numbers":[333333333.33333329,1E30,4.50,2e-3,0.000000000000000000000000001],"string":"€$\u000f\nA'B\"\\\\\"/","literals":[null,true,false]}`;
+  const RFC8785_EXPECTED = String.raw`{"literals":[null,true,false],"numbers":[333333333.3333333,1e+30,4.5,0.002,1e-27],"string":"€$\u000f\nA'B\"\\\\\"/"}`;
+  // SHA-256 of the UTF-8 bytes of RFC8785_EXPECTED.
+  const RFC8785_SHA256 = '2d5e01a318d0f0879ab568c4be289c8b1f64ef8921a53c6277d5e069978baacb';
+
+  beforeAll(() => {
+    // jsdom does not implement SubtleCrypto; fall back to Node's WebCrypto.
+    const g = globalThis as any;
+    if (!g.crypto || !g.crypto.subtle) {
+      try {
+        Object.defineProperty(globalThis, 'crypto', {
+          value: webcrypto,
+          configurable: true,
+          writable: true,
+        });
+      } catch {
+        g.crypto = webcrypto;
+      }
+    }
+  });
+
+  it('matches the RFC 8785 reference test vector', () => {
+    const parsed = JSON.parse(RFC8785_INPUT);
+    expect(jcsCanonicalize(parsed)).toBe(RFC8785_EXPECTED);
+    expect(canonicalJSONJCS(parsed)).toBe(RFC8785_EXPECTED);
+  });
+
+  it('canonicalizes empty objects and arrays without whitespace', () => {
+    expect(jcsCanonicalize({})).toBe('{}');
+    expect(jcsCanonicalize([])).toBe('[]');
+    expect(jcsCanonicalize({ b: {}, a: [] })).toBe('{"a":[],"b":{}}');
+  });
+
+  it('sorts object keys by UTF-16 code unit order', () => {
+    expect(jcsCanonicalize({ b: 1, a: 2, A: 3 })).toBe('{"A":3,"a":2,"b":1}');
+    expect(jcsCanonicalize({ '10': 1, '2': 2 })).toBe('{"10":1,"2":2}');
+    expect(jcsCanonicalize({ z: { d: 1, c: [3, 2, 1] }, a: null })).toBe(
+      '{"a":null,"z":{"c":[3,2,1],"d":1}}'
+    );
+    // Key order in the input must not survive into the output.
+    expect(canonicalJSONJCS({ b: 1, a: 2 })).toBe(canonicalJSONJCS({ a: 2, b: 1 }));
+  });
+
+  it('formats numbers with ECMAScript Number::toString semantics', () => {
+    expect(jcsCanonicalize(333333333.33333329)).toBe('333333333.3333333');
+    expect(jcsCanonicalize(1e30)).toBe('1e+30');
+    expect(jcsCanonicalize(4.5)).toBe('4.5');
+    expect(jcsCanonicalize(2e-3)).toBe('0.002');
+    expect(jcsCanonicalize(1e-27)).toBe('1e-27');
+    expect(jcsCanonicalize(-0)).toBe('0');
+    expect(jcsCanonicalize(100)).toBe('100');
+  });
+
+  it('escapes strings using only the RFC 8785 escape sequences', () => {
+    expect(jcsCanonicalize('a"b\\c')).toBe('"a\\"b\\\\c"');
+    expect(jcsCanonicalize('\b\t\n\f\r')).toBe('"\\b\\t\\n\\f\\r"');
+    expect(jcsCanonicalize('\u000f')).toBe('"\\u000f"');
+    expect(jcsCanonicalize('€')).toBe('"€"');
+    expect(jcsCanonicalize('😀')).toBe('"😀"');
+  });
+
+  it('escapes lone surrogates so the output is well-formed', () => {
+    expect(jcsCanonicalize('\ud800')).toBe('"\\ud800"');
+    expect(jcsCanonicalize('a\udc00b')).toBe('"a\\udc00b"');
+  });
+
+  it('rejects values that have no JSON representation', () => {
+    expect(() => jcsCanonicalize(undefined)).toThrow(JCSUnsupportedTypeError);
+    expect(() => jcsCanonicalize(NaN)).toThrow(JCSUnsupportedTypeError);
+    expect(() => jcsCanonicalize(Infinity)).toThrow(JCSUnsupportedTypeError);
+    expect(() => jcsCanonicalize(-Infinity)).toThrow(JCSUnsupportedTypeError);
+    expect(() => jcsCanonicalize({ a: undefined })).toThrow(JCSUnsupportedTypeError);
+    expect(() => jcsCanonicalize(() => 1)).toThrow(JCSUnsupportedTypeError);
+
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    expect(() => jcsCanonicalize(circular)).toThrow(JCSUnsupportedTypeError);
+  });
+
+  it('normalises unicode to NFC only when requested', () => {
+    const decomposed = 'e\u0301';
+    expect(jcsCanonicalize(decomposed)).toBe('"e\u0301"');
+    expect(jcsCanonicalize(decomposed, { unicodeNormalization: 'NFC' })).toBe('"é"');
+  });
+
+  it('produces byte-identical UTF-8 output', () => {
+    const parsed = JSON.parse(RFC8785_INPUT);
+    expect(Array.from(canonicalJSONBytes(parsed))).toEqual(
+      Array.from(new TextEncoder().encode(RFC8785_EXPECTED))
+    );
+    // '"€"' is two ASCII quotes plus the three UTF-8 bytes of U+20AC.
+    expect(canonicalJSONBytes('€')).toEqual(new Uint8Array([0x22, 0xe2, 0x82, 0xac, 0x22]));
+  });
+
+  it('derives identical SHA-256 hashes regardless of key order', async () => {
+    const first = await hashCanonicalPayload({ recipient: 'alice', amount: '100', nonce: 1 });
+    const second = await hashCanonicalPayload({ nonce: 1, amount: '100', recipient: 'alice' });
+
+    expect(first).toBe(second);
+    expect(first).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('hashes the canonical UTF-8 bytes of the RFC 8785 vector', async () => {
+    const digest = await hashCanonicalPayload(JSON.parse(RFC8785_INPUT));
+    expect(digest).toBe(RFC8785_SHA256);
+  });
+
+  it('separates signed payload bytes and hashes by versioned domain', async () => {
+    const first = domainSeparatedCanonicalJSONBytes('trellis.payment.v1', { b: 2, a: 1 });
+    const reordered = domainSeparatedCanonicalJSONBytes('trellis.payment.v1', { a: 1, b: 2 });
+    const otherDomain = domainSeparatedCanonicalJSONBytes('trellis.session.v1', { a: 1, b: 2 });
+
+    expect(first).toEqual(reordered);
+    expect(first).not.toEqual(otherDomain);
+    await expect(hashDomainSeparatedPayload('trellis.payment.v1', { a: 1, b: 2 }))
+      .resolves.toMatch(/^[0-9a-f]{64}$/);
+    const paymentHash = await hashDomainSeparatedPayload('trellis.payment.v1', { a: 1, b: 2 });
+    const sessionHash = await hashDomainSeparatedPayload('trellis.session.v1', { a: 1, b: 2 });
+    expect(paymentHash).not.toBe(sessionHash);
+  });
+
+  it('rejects ambiguous or unversioned payload domains', () => {
+    expect(() => domainSeparatedCanonicalJSONBytes('', {})).toThrow(/domain/i);
+    expect(() => domainSeparatedCanonicalJSONBytes('Trellis.Payment', {})).toThrow(/domain/i);
+    expect(() => domainSeparatedCanonicalJSONBytes('trellis\0payment', {})).toThrow(/domain/i);
+  });
+
+  it('produces different hashes for different payloads', async () => {
+    const first = await hashCanonicalPayload({ amount: 100, fee: 1 });
+    const second = await hashCanonicalPayload({ amount: 100.00001, fee: 1 });
+    expect(first).not.toBe(second);
   });
 });

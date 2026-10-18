@@ -38,7 +38,14 @@ let provenanceRecords: ProvenanceRecord[] = [
     timestamp: new Date(Date.now() - 3400000).toISOString(),
     status: "success",
     txHash: "GCB...123",
-    details: { payload: { amount: "100", asset: "XLM" } }
+    details: { 
+      payload: { amount: "100", asset: "XLM" },
+      proof: {
+        leafHash: "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592", // SHA256 of leaf
+        siblingHashes: ["b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"], // SHA256 of sibling
+        rootHash: "7b0b2ce28f804dcde9ef3ec04fb49dfc1eb603bc2e2a2221baeebeffb5d7d3d7"
+      }
+    }
   },
   {
     id: "pv-4",

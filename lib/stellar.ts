@@ -184,17 +184,39 @@ export async function connectAlbedo(network: StellarNetwork): Promise<string> {
 }
 
 /**
- * Connect to Ledger wallet (placeholder for Ledger implementation)
+ * Check whether this browser can reach a Ledger device over WebHID.
+ *
+ * WebHID is only exposed by Chromium-based browsers in a secure context.
+ */
+export function isLedgerAvailable(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const hid = (navigator as Navigator & { hid?: { requestDevice?: unknown } }).hid;
+  return Boolean(hid && typeof hid.requestDevice === "function");
+}
+
+/**
+ * Connect to a Ledger hardware wallet over WebHID and return its Stellar address.
+ *
+ * The device derives the account at `m/44'/148'/0'` and displays the resulting
+ * address so the user can verify the key on the hardware screen before the app
+ * trusts it. Ledger support is loaded on demand so the hardware transport never
+ * ships in the main bundle.
  */
 export async function connectLedger(network: StellarNetwork): Promise<string> {
+  if (!STELLAR_NETWORKS[network]) {
+    throw new Error(`Unsupported Stellar network: ${network}`);
+  }
+
+  const ledger = await import("@/features/wallet/ledger").catch(() => null);
+  if (!ledger) {
+    throw new Error("Ledger support could not be loaded. Reload the page and try again.");
+  }
+
   try {
-    // This is a placeholder. Full Ledger implementation would require @ledgerhq/hw-transport-u2f
-    // and additional setup. For now, we throw an error indicating it's not fully implemented.
-    throw new Error(
-      "Ledger wallet integration coming soon. Please use Freighter or Albedo for now.",
-    );
+    const adapter = await ledger.connectLedgerWallet();
+    return await adapter.getAddress({ display: true });
   } catch (error) {
-    throw error;
+    throw new Error(ledger.toUserMessage(error));
   }
 }
 
@@ -275,6 +297,51 @@ export async function signTransactionWithAlbedo(
 }
 
 /**
+ * Sign a transaction with a Ledger hardware wallet and attach the signature.
+ *
+ * The device signs `transaction.signatureBase()`, which binds the network
+ * passphrase into the payload, and the resulting Ed25519 signature is attached as
+ * a `DecoratedSignature` whose hint is the last 4 bytes of the device public key.
+ */
+export async function signTransactionWithLedger(
+  transaction: StellarSdk.Transaction,
+  network: StellarNetwork,
+): Promise<TransactionResult> {
+  if (!STELLAR_NETWORKS[network]) {
+    return { success: false, error: `Unsupported Stellar network: ${network}` };
+  }
+
+  try {
+    const ledger = await import("@/features/wallet/ledger");
+    const { signature, hint } = await ledger.signWithLedger(transaction);
+
+    transaction.signatures.push(
+      new StellarSdk.xdr.DecoratedSignature({
+        hint: Buffer.from(hint),
+        signature: Buffer.from(signature),
+      }),
+    );
+
+    return {
+      success: true,
+      hash: transaction.hash().toString("hex"),
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: ledgerErrorMessage(error),
+    };
+  }
+}
+
+function ledgerErrorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "message" in error) {
+    return String((error as { message?: unknown }).message ?? "Failed to sign with Ledger");
+  }
+  return "Failed to sign with Ledger";
+}
+
+/**
  * Submit a transaction to the Stellar network
  */
 export async function submitTransaction(
@@ -293,6 +360,7 @@ export async function submitTransaction(
     return {
       success: true,
       hash: result.hash,
+      ledger: result.ledger,
     };
   } catch (error: any) {
     return {

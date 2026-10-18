@@ -145,3 +145,5 @@ blob-report/
 branch_structure.json
 temp_auto_push.bat
 temp_interactive_push.bat
+# NOTE: e2e/__screenshots__/ holds committed visual-regression baselines — do not
+# add it here. It is the reference your Playwright snapshot comparisons use.

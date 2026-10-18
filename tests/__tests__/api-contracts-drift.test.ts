@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { API_CONTRACTS, validateContractSchema } from '@/lib/api-contracts/schemas';
 import { GET as getAffiliates } from '@/app/api/affiliates/route';
 import { GET as getAffiliatesProgram } from '@/app/api/affiliates/program/route';
@@ -66,10 +67,10 @@ describe('Public API Contract Drift Tests (Issue #39)', () => {
   });
 
   it('detects schema drift on modified responses', () => {
-    const fakeSchema = {
-      type: 'object',
-      required: ['nonExistentField', 'anotherMissing'],
-    };
+    const fakeSchema = z.object({
+      nonExistentField: z.string(),
+      anotherMissing: z.string(),
+    });
     const testData = { message: 'hello' };
     const validation = validateContractSchema(testData, fakeSchema);
     expect(validation.valid).toBe(false);

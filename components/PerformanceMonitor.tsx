@@ -73,7 +73,7 @@ const PerformanceMonitor: React.FC<PerformanceMonitorProps> = React.memo(({
           <div>Memory: {metrics.memoryUsage}MB</div>
         )}
         <div className={`font-semibold ${isPerformant ? 'text-green-500' : 'text-red-500'}`}>
-          {isPerformant ? '✓ Target Met' : `✗ Below ${targetFPS} FPS`}
+          {isPerformant ? '✓ Target Met' : `x◎ Below ${targetFPS} FPS`}
         </div>
       </div>
     </div>
