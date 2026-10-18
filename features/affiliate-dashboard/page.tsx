@@ -4,6 +4,7 @@ import React from 'react';
 import { useAffiliateData } from './hooks/useAffiliateData';
 import AffiliateStats from './components/AffiliateStats';
 import EarningsChart from './components/EarningsChart';
+import ReferralPerformanceChart from './components/ReferralPerformanceChart';
 import CommissionBreakdown from './components/CommissionBreakdown';
 import ReferralTable from './components/ReferralTable';
 import PayoutHistory from './components/PayoutHistory';
@@ -27,6 +28,7 @@ export default function AffiliateDashboardPage() {
     payoutRequests,
     program,
     earningsHistory,
+    clickMetrics,
     isLoading,
     error,
     requestPayout,
@@ -135,6 +137,11 @@ export default function AffiliateDashboardPage() {
         {/* Charts Section */}
         <div className="mb-8">
           <EarningsChart data={earningsHistory} isLoading={isLoading} />
+        </div>
+
+        {/* Referral Click Performance (issue #128) */}
+        <div className="mb-8">
+          <ReferralPerformanceChart data={clickMetrics} isLoading={isLoading} />
         </div>
 
         {/* Commission Breakdown */}

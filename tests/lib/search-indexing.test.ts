@@ -8,6 +8,7 @@ import {
   logVisibilityChange,
   getVisibilityAuditLog,
   createSearchIndexConfig,
+  recommendIndexRepair,
 } from '@/lib/search-indexing';
 import type {
   IndexableRecord,
@@ -21,6 +22,44 @@ describe('Search Indexing - Permission Awareness', () => {
     title: 'Emergency Aid Claim',
     amount: 100,
   };
+
+  describe('operator repair recommendations', () => {
+    it('reports a missing entry with the evidence and safe repair action', () => {
+      expect(recommendIndexRepair(mockRecord, { isPublic: true })).toEqual({
+        recordId: mockRecord.id,
+        evidence: 'missing-index-entry',
+        action: 'create-or-update',
+      });
+    });
+
+    it('recommends removal when authoritative visibility has been revoked', () => {
+      const indexed: IndexedRecord = { id: mockRecord.id, visibility: 'public', indexed_at: Date.now() };
+      expect(recommendIndexRepair(mockRecord, { isPublic: false }, indexed)).toEqual({
+        recordId: mockRecord.id,
+        evidence: 'visibility-mismatch',
+        action: 'remove',
+      });
+    });
+
+    it('reports permission scope drift without including permission values', () => {
+      const indexed: IndexedRecord = { id: mockRecord.id, visibility: 'restricted', visibleTo: ['old-user'], indexed_at: Date.now() };
+      const recommendation = recommendIndexRepair(mockRecord, { visibleTo: ['current-user'] }, indexed);
+      expect(recommendation).toMatchObject({ evidence: 'permission-scope-mismatch', action: 'create-or-update' });
+      expect(JSON.stringify(recommendation)).not.toContain('current-user');
+    });
+
+    it('preserves and checks role and organization scopes', () => {
+      const scoped = createIndexEntry(mockRecord, {
+        requiredRoles: ['reviewer'],
+        organizationId: 'trusted-org',
+      });
+      expect(scoped).toMatchObject({ requiredRoles: ['reviewer'], organizationId: 'trusted-org' });
+      expect(recommendIndexRepair(mockRecord, {
+        requiredRoles: ['reviewer'],
+        organizationId: 'another-org',
+      }, scoped ?? undefined)).toMatchObject({ evidence: 'permission-scope-mismatch', action: 'create-or-update' });
+    });
+  });
 
   describe('getRecordVisibility', () => {
     it('returns hidden for records without visibility', () => {
@@ -421,3 +460,89 @@ describe('Search Indexing - Permission Awareness', () => {
     });
   });
 });
+
+  describe('Incremental Indexing', () => {
+    let mockSearchClient: any;
+
+    beforeEach(() => {
+      mockSearchClient = {
+        saveObject: jest.fn().mockResolvedValue({}),
+        deleteObject: jest.fn().mockResolvedValue({}),
+      };
+    });
+
+    it('updateRecord should skip update if no searchable fields or visibility changed', async () => {
+      const oldRecord = { id: 'agent-1', name: 'Test Agent', status: 'active' };
+      const newRecord = { id: 'agent-1', name: 'Test Agent', status: 'inactive' }; // status is not searchable
+      const permissions = { isPublic: true };
+      
+      const { updateRecord } = require('@/lib/search-indexing');
+      await updateRecord(newRecord, permissions, oldRecord, mockSearchClient, 'agents', ['name']);
+      
+      expect(mockSearchClient.saveObject).not.toHaveBeenCalled();
+    });
+
+    it('updateRecord should trigger update if searchable fields changed', async () => {
+      const oldRecord = { id: 'agent-1', name: 'Test Agent', status: 'active' };
+      const newRecord = { id: 'agent-1', name: 'Updated Agent', status: 'active' }; 
+      const permissions = { isPublic: true };
+      
+      const { updateRecord } = require('@/lib/search-indexing');
+      await updateRecord(newRecord, permissions, oldRecord, mockSearchClient, 'agents', ['name']);
+      
+      expect(mockSearchClient.saveObject).toHaveBeenCalledTimes(1);
+    });
+
+    it('updateRecord should trigger delete if visibility changed to hidden', async () => {
+      const oldRecord = { id: 'agent-1', name: 'Test Agent', status: 'active' };
+      const newRecord = { id: 'agent-1', name: 'Test Agent', status: 'active' };
+      // The record was indexed while public; it has since become hidden.
+      const oldPermissions = { isPublic: true };
+      const permissions = { isPublic: false };
+
+      const { updateRecord } = require('@/lib/search-indexing');
+      await updateRecord(newRecord, permissions, oldRecord, mockSearchClient, 'agents', ['name'], oldPermissions);
+
+      expect(mockSearchClient.deleteObject).toHaveBeenCalledTimes(1);
+      expect(mockSearchClient.deleteObject).toHaveBeenCalledWith({
+        indexName: 'agents',
+        objectID: 'agent-1',
+      });
+    });
+
+    it('updateRecord should update when only the permission scope changed', async () => {
+      const oldRecord = { id: 'agent-1', name: 'Test Agent', status: 'active' };
+      const newRecord = { id: 'agent-1', name: 'Test Agent', status: 'active' };
+      const oldPermissions = { visibleTo: ['user-1'] };
+      const permissions = { visibleTo: ['user-1', 'user-2'] };
+
+      const { updateRecord } = require('@/lib/search-indexing');
+      await updateRecord(newRecord, permissions, oldRecord, mockSearchClient, 'agents', ['name'], oldPermissions);
+
+      expect(mockSearchClient.saveObject).toHaveBeenCalledTimes(1);
+      expect(mockSearchClient.deleteObject).not.toHaveBeenCalled();
+    });
+
+    it('updateRecord should not touch the index when a mock client is used', async () => {
+      const oldRecord = { id: 'agent-1', name: 'Test Agent', status: 'active' };
+      const newRecord = { id: 'agent-1', name: 'Updated Agent', status: 'active' };
+      const permissions = { isPublic: true };
+
+      const { updateRecord } = require('@/lib/search-indexing');
+      // No client / index name -> no-op instead of throwing.
+      await expect(
+        updateRecord(newRecord, permissions, oldRecord)
+      ).resolves.toBeUndefined();
+    });
+
+    it('deleteRecord should trigger delete in search client', async () => {
+      const { deleteRecord } = require('@/lib/search-indexing');
+      await deleteRecord('agent-1', mockSearchClient, 'agents');
+      
+      expect(mockSearchClient.deleteObject).toHaveBeenCalledTimes(1);
+      expect(mockSearchClient.deleteObject).toHaveBeenCalledWith({
+        indexName: 'agents',
+        objectID: 'agent-1',
+      });
+    });
+  });

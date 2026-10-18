@@ -33,6 +33,8 @@ function buildEngine() {
         rewardWeight: 2,
         stakeMultiplier: 1,
         minStake: 10,
+        unbondingPeriodMs: 7 * 24 * 60 * 60 * 1000, // 7 days
+        emergencyPenaltyRate: 0.1, // 10%
       },
       {
         id: "usdc",
@@ -40,6 +42,8 @@ function buildEngine() {
         rewardWeight: 1,
         stakeMultiplier: 1.5,
         minStake: 5,
+        unbondingPeriodMs: 14 * 24 * 60 * 60 * 1000, // 14 days
+        emergencyPenaltyRate: 0.25, // 25%
       },
     ],
   });
@@ -72,10 +76,44 @@ describe("MultiAssetStakingEngine", () => {
     const unstakeResult = engine.unstake("alice", "xlm", 40, 10_000);
     expect(unstakeResult.pendingRewards).toBeCloseTo(600, 6);
     expect(unstakeResult.position?.stakedAmount).toBe(60);
+    expect(unstakeResult.position?.unbondingRequests).toHaveLength(1);
 
     const claimResult = engine.claimRewards("alice", "xlm", 10_000);
     expect(claimResult.rewardClaimed).toBeCloseTo(600, 6);
     expect(engine.previewRewards("alice", "xlm", 20_000)).toBeCloseTo(600, 6);
+  });
+  
+  it("calculates APY correctly", () => {
+    const engine = buildEngine();
+    engine.stake("alice", "xlm", 100, 0);
+    // emission = 60/sec, effective stake = 100
+    // APY = (60 * 31536000 / 100) * 100 = 1892160000
+    expect(engine.getAPY("xlm")).toBeCloseTo(1892160000, 0);
+  });
+
+  it("handles unbonding queue and claiming unbonded tokens", () => {
+    const engine = buildEngine();
+    engine.stake("alice", "xlm", 100, 0);
+    
+    engine.unstake("alice", "xlm", 40, 0);
+    // Unbonding period is 7 days
+    const unbondTime = 7 * 24 * 60 * 60 * 1000;
+    
+    let claimable = engine.claimUnbonded("alice", "xlm", unbondTime - 1);
+    expect(claimable).toBe(0);
+    
+    claimable = engine.claimUnbonded("alice", "xlm", unbondTime);
+    expect(claimable).toBe(40);
+  });
+
+  it("applies penalty for emergency unstaking", () => {
+    const engine = buildEngine();
+    engine.stake("alice", "usdc", 100, 0);
+    
+    const result = engine.emergencyUnstake("alice", "usdc", 50, 10_000);
+    // 25% penalty on 50 = 12.5, amount returned = 37.5
+    expect(result.penalty).toBe(12.5);
+    expect(result.amountReturned).toBe(37.5);
   });
 
   it("rejects unsupported assets", () => {

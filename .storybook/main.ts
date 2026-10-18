@@ -4,9 +4,7 @@ const config: StorybookConfig = {
   stories: ['../components/**/*.stories.ts?(x)', '../features/**/*.stories.ts?(x)'],
   addons: [
     '@storybook/addon-links',
-    '@storybook/addon-essentials',
     '@storybook/addon-onboarding',
-    '@storybook/addon-interactions',
     '@storybook/addon-a11y',
     {
       name: '@storybook/addon-styling-webpack',

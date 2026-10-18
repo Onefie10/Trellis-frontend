@@ -1,0 +1,188 @@
+{
+  "description": "Envelopes whose payload is missing a required field, or whose required field has the wrong type. These are the drift cases a consumer must never be handed: the frame looks perfect, so only schema validation catches them.",
+  "expectAll": "rejected",
+  "cases": [
+    {
+      "name": "offline-queue-change with no pending field",
+      "expect": "rejected",
+      "reason": "invalid-payload",
+      "event": {
+        "name": "offline-queue-change",
+        "version": "1.0.0",
+        "id": "2a000001-0000-4000-8000-000000000001",
+        "timestamp": "2026-02-11T10:00:00.000Z",
+        "source": "pwa-utils",
+        "payload": {}
+      }
+    },
+    {
+      "name": "offline-queue-change with a stringified pending count",
+      "expect": "rejected",
+      "reason": "invalid-payload",
+      "event": {
+        "name": "offline-queue-change",
+        "version": "1.0.0",
+        "id": "2a000001-0000-4000-8000-000000000002",
+        "timestamp": "2026-02-11T10:00:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "pending": "3" }
+      }
+    },
+    {
+      "name": "offline-queue-change with a negative pending count",
+      "expect": "rejected",
+      "reason": "invalid-payload",
+      "event": {
+        "name": "offline-queue-change",
+        "version": "1.0.0",
+        "id": "2a000001-0000-4000-8000-000000000003",
+        "timestamp": "2026-02-11T10:00:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "pending": -1 }
+      }
+    },
+    {
+      "name": "offline-queue-synced missing remaining",
+      "expect": "rejected",
+      "reason": "invalid-payload",
+      "event": {
+        "name": "offline-queue-synced",
+        "version": "1.0.0",
+        "id": "2a000001-0000-4000-8000-000000000004",
+        "timestamp": "2026-02-11T10:01:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "synced": ["sub-1"], "dropped": [] }
+      }
+    },
+    {
+      "name": "offline-queue-synced with synced as a string instead of an array",
+      "expect": "rejected",
+      "reason": "invalid-payload",
+      "event": {
+        "name": "offline-queue-synced",
+        "version": "1.0.0",
+        "id": "2a000001-0000-4000-8000-000000000005",
+        "timestamp": "2026-02-11T10:02:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "synced": "sub-1", "dropped": [], "remaining": 0 }
+      }
+    },
+    {
+      "name": "connection-change missing online",
+      "expect": "rejected",
+      "reason": "invalid-payload",
+      "event": {
+        "name": "connection-change",
+        "version": "1.0.0",
+        "id": "2a000001-0000-4000-8000-000000000006",
+        "timestamp": "2026-02-11T10:03:00.000Z",
+        "source": "pwa-utils",
+        "payload": {}
+      }
+    },
+    {
+      "name": "connection-quality-change with a negative rtt",
+      "expect": "rejected",
+      "reason": "invalid-payload",
+      "event": {
+        "name": "connection-quality-change",
+        "version": "1.0.0",
+        "id": "2a000001-0000-4000-8000-000000000007",
+        "timestamp": "2026-02-11T10:04:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "online": true, "rtt": -1 }
+      }
+    },
+    {
+      "name": "NETWORK_CHANGED missing the required network field",
+      "expect": "rejected",
+      "reason": "invalid-payload",
+      "event": {
+        "name": "NETWORK_CHANGED",
+        "version": "2.0.0",
+        "id": "2a000001-0000-4000-8000-000000000008",
+        "timestamp": "2026-02-11T10:05:00.000Z",
+        "source": "tab-8f2a",
+        "payload": {}
+      }
+    },
+    {
+      "name": "NETWORK_CHANGED with 'public', the 1.0.0 vocabulary the app never produces",
+      "expect": "rejected",
+      "reason": "invalid-payload",
+      "event": {
+        "name": "NETWORK_CHANGED",
+        "version": "2.0.0",
+        "id": "2a000001-0000-4000-8000-000000000009",
+        "timestamp": "2026-02-11T10:06:00.000Z",
+        "source": "tab-8f2a",
+        "payload": { "network": "public" }
+      }
+    },
+    {
+      "name": "NETWORK_CHANGED with 'sandbox', which is not a Stellar network in this app",
+      "expect": "rejected",
+      "reason": "invalid-payload",
+      "event": {
+        "name": "NETWORK_CHANGED",
+        "version": "2.0.0",
+        "id": "2a000001-0000-4000-8000-000000000014",
+        "timestamp": "2026-02-11T10:12:00.000Z",
+        "source": "tab-8f2a",
+        "payload": { "network": "sandbox" }
+      }
+    },
+    {
+      "name": "NETWORK_CHANGED 1.0.0 with 'mainnet', which only the 2.0.0 vocabulary accepts",
+      "expect": "rejected",
+      "reason": "invalid-payload",
+      "event": {
+        "name": "NETWORK_CHANGED",
+        "version": "1.0.0",
+        "id": "2a000001-0000-4000-8000-000000000015",
+        "timestamp": "2026-02-11T10:13:00.000Z",
+        "source": "tab-8f2a",
+        "payload": { "network": "mainnet" }
+      }
+    },
+    {
+      "name": "THEME_MUTATED missing mode",
+      "expect": "rejected",
+      "reason": "invalid-payload",
+      "event": {
+        "name": "THEME_MUTATED",
+        "version": "1.0.0",
+        "id": "2a000001-0000-4000-8000-00000000000a",
+        "timestamp": "2026-02-11T10:07:00.000Z",
+        "source": "tab-8f2a",
+        "payload": {}
+      }
+    },
+    {
+      "name": "sw-update with available false, which the literal forbids",
+      "expect": "rejected",
+      "reason": "invalid-payload",
+      "event": {
+        "name": "sw-update",
+        "version": "1.0.0",
+        "id": "2a000001-0000-4000-8000-00000000000b",
+        "timestamp": "2026-02-11T10:08:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "available": false }
+      }
+    },
+    {
+      "name": "WALLET_DISCONNECTED with a non-string reason",
+      "expect": "rejected",
+      "reason": "invalid-payload",
+      "event": {
+        "name": "WALLET_DISCONNECTED",
+        "version": "1.0.0",
+        "id": "2a000001-0000-4000-8000-00000000000c",
+        "timestamp": "2026-02-11T10:09:00.000Z",
+        "source": "tab-8f2a",
+        "payload": { "reason": 42 }
+      }
+    }
+  ]
+}

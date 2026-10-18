@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeConfig } from '../types';
+import QRCode from 'qrcode';
 
 interface QRCodeGeneratorProps {
   config: QRCodeConfig;
@@ -17,8 +18,15 @@ const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({ config, className = '
   const generateQRCode = async () => {
     setIsLoading(true);
     try {
-      const qrUrl = await createQRCodeImage(config);
-      setQrCodeUrl(qrUrl);
+      const url = await QRCode.toDataURL(config.url, {
+        width: config.size || 200,
+        margin: 2,
+        color: {
+          dark: config.fgColor || '#000000',
+          light: config.bgColor || '#ffffff',
+        },
+      });
+      setQrCodeUrl(url);
     } catch (error) {
       console.error('Failed to generate QR code:', error);
       // Fallback to external QR code service
@@ -29,72 +37,11 @@ const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({ config, className = '
     }
   };
 
-  const createQRCodeImage = async (config: QRCodeConfig): Promise<string> => {
-    // Simple QR code generation using canvas
-    const size = config.size || 200;
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    if (!ctx) {
-      throw new Error('Canvas not supported');
-    }
-
-    canvas.width = size;
-    canvas.height = size;
-
-    // Background
-    ctx.fillStyle = config.bgColor || '#ffffff';
-    ctx.fillRect(0, 0, size, size);
-
-    // Simple QR code pattern (for demonstration)
-    // In production, use a proper QR code library like qrcode.js
-    const cellSize = Math.floor(size / 25);
-    const fgColor = config.fgColor || '#000000';
-    ctx.fillStyle = fgColor;
-
-    // Generate a simple pattern that looks like a QR code
-    const data = config.url;
-    let hash = 0;
-    for (let i = 0; i < data.length; i++) {
-      hash = ((hash << 5) - hash) + data.charCodeAt(i);
-      hash = hash & hash;
-    }
-
-    // Draw QR-like pattern
-    for (let row = 0; row < 25; row++) {
-      for (let col = 0; col < 25; col++) {
-        const shouldFill = (hash + row * col) % 3 !== 0;
-        if (shouldFill) {
-          ctx.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
-        }
-      }
-    }
-
-    // Add corner squares (QR code markers)
-    drawCornerSquare(ctx, 0, 0, cellSize * 7, fgColor);
-    drawCornerSquare(ctx, size - cellSize * 7, 0, cellSize * 7, fgColor);
-    drawCornerSquare(ctx, 0, size - cellSize * 7, cellSize * 7, fgColor);
-
-    return canvas.toDataURL();
-  };
-
-  const drawCornerSquare = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number, color: string) => {
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, size, size);
-    
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(x + size * 0.14, y + size * 0.14, size * 0.72, size * 0.72);
-    
-    ctx.fillStyle = color;
-    ctx.fillRect(x + size * 0.28, y + size * 0.28, size * 0.44, size * 0.44);
-  };
-
   const downloadQRCode = () => {
     if (!qrCodeUrl) return;
-
     const link = document.createElement('a');
     link.href = qrCodeUrl;
-    link.download = `qrcode-${Date.now()}.png`;
+    link.download = `trellis-referral-qr-${Date.now()}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -131,3 +78,4 @@ const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({ config, className = '
 };
 
 export default QRCodeGenerator;
+

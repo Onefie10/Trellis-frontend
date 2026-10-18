@@ -1,3 +1,9 @@
+export interface MerkleProof {
+  leafHash: string;
+  siblingHashes: string[];
+  rootHash: string;
+}
+
 export interface ProvenanceRecord {
   id: string;
   agentId: string;
@@ -14,6 +20,7 @@ export interface ProvenanceRecord {
     output?: string;
     payload?: any;
     error?: string;
+    proof?: MerkleProof;
   };
 }
 

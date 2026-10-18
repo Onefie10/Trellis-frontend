@@ -32,6 +32,10 @@ export interface TelemetryEvent {
   type: TelemetryEventType;
   severity: TelemetrySeverity;
   payload?: TelemetryEventPayload;
+  /** Classification of metadata under minimization policy */
+  classification?: 'PUBLIC' | 'OPERATIONAL' | 'SENSITIVE' | 'RESTRICTED';
+  /** Timestamp when event expires under retention enforcement */
+  expiresAt?: number;
 }
 
 export interface TelemetryFilters {

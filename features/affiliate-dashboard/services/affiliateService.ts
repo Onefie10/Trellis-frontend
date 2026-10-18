@@ -5,6 +5,7 @@ import {
   ReferralRecord,
   PayoutRequest,
   AffiliateProgram,
+  ReferralClickMetrics,
 } from '../types';
 
 const API_BASE = '/api/affiliates';
@@ -110,5 +111,17 @@ export const affiliateService = {
     days: number = 30
   ): Promise<EarningsHistory[]> => {
     return apiClient.get(`${API_BASE}/earnings?wallet=${walletAddress}&days=${days}`);
+  },
+
+  /**
+   * CTR / conversion metrics for the wallet's vanity referral links (#128).
+   * Derived server-side from the recorded click ledger so the chart can never
+   * disagree with the attribution data.
+   */
+  getReferralClickMetrics: async (
+    walletAddress: string,
+    days: number = 30
+  ): Promise<ReferralClickMetrics> => {
+    return apiClient.get(`${API_BASE}/referral-clicks?wallet=${walletAddress}&days=${days}`);
   },
 };

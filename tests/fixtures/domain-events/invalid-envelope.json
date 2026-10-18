@@ -1,0 +1,116 @@
+{
+  "description": "Frames that are wrong before the payload is even considered: an undeclared top-level field, a name that is not in the catalog, a non-object message, and an envelope whose name disagrees with the transport it arrived on. These prove the strict envelope is doing real work.",
+  "expectAll": "rejected",
+  "cases": [
+    {
+      "name": "undeclared top-level field is refused by the strict envelope",
+      "expect": "rejected",
+      "reason": "invalid-envelope",
+      "event": {
+        "name": "offline-queue-change",
+        "version": "1.0.0",
+        "id": "4c000001-0000-4000-8000-000000000001",
+        "timestamp": "2026-02-11T12:00:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "pending": 1 },
+        "internalOnly": "should never cross the boundary"
+      }
+    },
+    {
+      "name": "event name that was never registered",
+      "expect": "rejected",
+      "reason": "unknown-event",
+      "event": {
+        "name": "trellis-internal-debug",
+        "version": "1.0.0",
+        "id": "4c000001-0000-4000-8000-000000000002",
+        "timestamp": "2026-02-11T12:01:00.000Z",
+        "source": "somewhere",
+        "payload": { "anything": true }
+      }
+    },
+    {
+      "name": "missing required envelope field timestamp",
+      "expect": "rejected",
+      "reason": "invalid-envelope",
+      "event": {
+        "name": "offline-queue-change",
+        "version": "1.0.0",
+        "id": "4c000001-0000-4000-8000-000000000003",
+        "source": "pwa-utils",
+        "payload": { "pending": 1 }
+      }
+    },
+    {
+      "name": "timestamp that is not ISO 8601",
+      "expect": "rejected",
+      "reason": "invalid-envelope",
+      "event": {
+        "name": "offline-queue-change",
+        "version": "1.0.0",
+        "id": "4c000001-0000-4000-8000-000000000004",
+        "timestamp": "yesterday",
+        "source": "pwa-utils",
+        "payload": { "pending": 1 }
+      }
+    },
+    {
+      "name": "empty event id",
+      "expect": "rejected",
+      "reason": "invalid-envelope",
+      "event": {
+        "name": "offline-queue-change",
+        "version": "1.0.0",
+        "id": "",
+        "timestamp": "2026-02-11T12:02:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "pending": 1 }
+      }
+    },
+    {
+      "name": "event name containing characters outside the allowed pattern",
+      "expect": "rejected",
+      "reason": "unknown-event",
+      "event": {
+        "name": "offline queue change!",
+        "version": "1.0.0",
+        "id": "4c000001-0000-4000-8000-000000000005",
+        "timestamp": "2026-02-11T12:03:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "pending": 1 }
+      }
+    },
+    {
+      "name": "missing payload entirely",
+      "expect": "rejected",
+      "reason": "invalid-envelope",
+      "event": {
+        "name": "offline-queue-change",
+        "version": "1.0.0",
+        "id": "4c000001-0000-4000-8000-000000000006",
+        "timestamp": "2026-02-11T12:04:00.000Z",
+        "source": "pwa-utils"
+      }
+    }
+  ],
+  "nonObjectCases": [
+    {
+      "name": "a bare string on the channel",
+      "expect": "rejected",
+      "reason": "not-an-object",
+      "event": "offline-queue-change"
+    },
+    {
+      "name": "null on the channel",
+      "expect": "rejected",
+      "reason": "not-an-object",
+      "event": null
+    },
+    {
+      "name": "a bare array on the channel",
+      "expect": "rejected",
+      "reason": "not-an-object",
+      "event": [{ "name": "offline-queue-change" }]
+    }
+  ]
+}

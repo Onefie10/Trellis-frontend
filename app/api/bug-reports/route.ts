@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PRIORITY_REWARDS, CATEGORY_MULTIPLIERS, type BugReport } from '../../../types/bug-report';
 import { paginateBugReports } from '@/lib/bug-reports-pagination';
 import { isFeatureEnabled } from '@/lib/feature-flags';
+import { checkRateLimit, createRateLimitResponse } from '@/lib/security/rate-limit';
+import { csrfMiddleware } from '@/lib/security/csrf';
 
 // In-memory storage for demo purposes
 // In production, this would be replaced with a database
@@ -11,7 +13,17 @@ export function getBugReports(): readonly BugReport[] {
   return bugReports;
 }
 
+const BUG_REPORT_RATE_LIMIT = { maxRequests: 5, windowMs: 60 * 60 * 1000, scope: 'bug_reports' };
+
 export async function POST(request: NextRequest) {
+  const csrfError = csrfMiddleware(request);
+  if (csrfError) return csrfError;
+
+  const rl = checkRateLimit(request, BUG_REPORT_RATE_LIMIT);
+  if (rl.blocked) {
+    return createRateLimitResponse(rl, 'Too many bug reports submitted. Please try again later.');
+  }
+
   try {
     const formData = await request.formData();
     

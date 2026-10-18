@@ -11,12 +11,24 @@ jest.mock('../services/affiliateService', () => ({
     getPayoutRequests: jest.fn(),
     getProgram: jest.fn(),
     getEarningsHistory: jest.fn(),
+    getReferralClickMetrics: jest.fn(),
     requestPayout: jest.fn(),
     generateReferralCode: jest.fn(),
   },
 }));
 
 const mockedService = jest.mocked(affiliateService);
+
+const emptyClickMetrics = {
+  totalImpressions: 0,
+  totalClicks: 0,
+  totalConversions: 0,
+  clickThroughRate: 0,
+  conversionRate: 0,
+  bySource: [],
+  byDevice: [],
+  series: [],
+};
 
 const baseServiceState = () => {
   mockedService.getStats.mockResolvedValue({
@@ -39,6 +51,7 @@ const baseServiceState = () => {
     guidelines: [],
     joinedAt: new Date().toISOString(),
   });
+  mockedService.getReferralClickMetrics.mockResolvedValue(emptyClickMetrics);
 };
 
 describe('useAffiliateStore earnings history (issue #8)', () => {
@@ -52,6 +65,7 @@ describe('useAffiliateStore earnings history (issue #8)', () => {
       payoutRequests: [],
       program: null,
       earningsHistory: [],
+      clickMetrics: null,
       isLoading: false,
       error: null,
     });

@@ -111,3 +111,101 @@ Tests cover:
 - Service adapter determinism
 - Fixture availability
 - Production credential exclusion
+
+## Mock wallet balance generator
+
+Build a wallet state (asset codes, issuers, balances) and inject it into components
+without spending testnet tokens.
+
+```typescript
+import { sandboxManager } from "@/lib/sandbox";
+import { buildMockWallet, buildWalletFromPreset } from "@/lib/sandbox-wallet";
+
+// Inject a wallet built from an explicit draft
+const wallet = buildMockWallet({
+  label: "QA account",
+  balances: [
+    { asset: "native", balance: "12.5" },
+    { asset: "USDC", issuer: "GBBD47IF…", balance: "250" },
+  ],
+});
+sandboxManager.setWalletState(wallet);
+
+sandboxManager.getWalletState(); // -> MockWalletState | null
+sandboxManager.getInjectedBalances(); // -> MockBalance[]
+sandboxManager.clearWalletState();
+
+// Or start from a preset
+sandboxManager.setWalletState(buildWalletFromPreset("low-xlm"));
+```
+
+`MockWalletState` carries `balances`, `reserve` (`subentryCount`, `baseReserve`,
+`minimumReserve`, `spendable`, `belowMinimum`) and `warnings`. Each `MockBalance`
+carries a normalised `balance` (7 decimal places), `balanceStroops`, `limit`,
+`authorized`, `sponsored` and `hasTrustline`, so a component can render a
+low-balance or unauthorised-trustline state on demand.
+
+Presets: `healthy`, `low-xlm`, `no-trustlines`, `unauthorised`, `empty`.
+
+`validateDraft(balances)` returns `{ ok: false, error }` for an invalid draft
+(bad asset code, malformed issuer, unparseable amount) instead of throwing, so the
+generator UI can show a message per row.
+
+The UI lives in `features/sandbox/components/WalletBalanceGenerator.tsx`
+(`useSandboxWallet()` for the draft rows and validation messages).
+
+## Scenario presets
+
+`lib/sandbox-scenarios.ts` models the on-chain failure modes that are awkward to
+reproduce: `out_of_energy`, `invalid_sequence` (`txBAD_SEQ`), `tx_expired`
+(`txTOO_LATE`), `insufficient_balance`, `missing_trustline`, `unauthorised_asset`,
+`contract_trap`, `invalid_argument`, `rate_limited`, `timeout` — plus `success`
+(`txSUCCESS`).
+
+```typescript
+import { isRetriableScenario } from "@/lib/sandbox-scenarios";
+import { scenarioToResponse } from "@/lib/sandbox-replay"; // or "@/..." path
+
+sandboxManager.setActiveScenario("out_of_energy"); // mock adapters now fail this way
+const response = scenarioToResponse("invalid_sequence");
+isRetriableScenario("tx_expired"); // true (txBAD_SEQ / txTOO_LATE are replayable)
+```
+
+Select one in the UI with `features/sandbox/components/ScenarioPresetSelector.tsx`.
+
+## Transaction recorder and replay
+
+```typescript
+import { ScenarioRecorder, TransactionReplayAdapter } from "@/lib/sandbox-replay";
+
+const recorder = new ScenarioRecorder({ name: "payment flow" }).start();
+await recorder.capture("submitTransaction", request, () => stellar.submit(request));
+
+const tape = recorder.toTape();
+const replay = new TransactionReplayAdapter(tape, { strategy: "first-match" });
+await replay.replay("submitTransaction", request); // -> the recorded SandboxResponse
+```
+
+Replayable methods: `getBalance`, `getBalances`, `simulateTransaction`,
+`submitTransaction`, `getTransactionStatus`. Strategies: `first-match`,
+`sequence`, `last-match`, `round-robin`, with `matchRequest`, `latencyMs`,
+`jitterMs`, `onExhausted` (`"error"` or `"last"`) and a `seed` for reproducible
+jitter. `replaySync()` skips simulated latency.
+
+Tapes round-trip as JSON (`recorder.toJSON()`, `parseTape()`, `recorder.load()`)
+and `buildTapeFromScenarios()` / `buildTapeFromPreset("edge-cases")` produce a
+ready-made tape for a scenario.
+
+The UI lives in `features/sandbox/components/TransactionScenarioRecorder.tsx`
+(`useScenarioRecorder()` for tapes, replay runs and history).
+
+## Sandbox panel
+
+`features/sandbox/components/SandboxPanel.tsx` combines the snapshot banner, mode
+switcher, wallet generator, preset selector and recorder in one drop-in component:
+
+```tsx
+import { SandboxPanel } from "@/features/sandbox/components/SandboxPanel";
+
+<SandboxPanel />;
+```

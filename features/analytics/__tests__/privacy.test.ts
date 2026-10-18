@@ -1,10 +1,18 @@
 import { analyticsManager, AggregateMetric } from "../../../lib/analytics";
 import { isMetricSafe, isFieldSafe } from "../../../lib/metric-definitions";
+import { privatizeCount, sampleLaplaceNoise } from "../privacy";
+
+let fetchMock: jest.Mock;
 
 describe("Privacy-Preserving Analytics", () => {
   beforeEach(() => {
     analyticsManager.reset();
     analyticsManager.initialize({ enabled: true });
+    fetchMock = jest.fn().mockResolvedValue({ ok: true });
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: fetchMock,
+    });
   });
 
   describe("Sensitive Data Blocking", () => {
@@ -205,6 +213,82 @@ describe("Privacy-Preserving Analytics", () => {
 
       const config = analyticsManager.initialize({ enabled: true });
       expect(config).toBeUndefined(); // Method returns void
+    });
+  });
+
+  describe("Differential privacy noise", () => {
+    it("uses the inverse Laplace CDF with the configured epsilon and sensitivity", () => {
+      expect(sampleLaplaceNoise(1, 1, () => 0.5)).toBe(0);
+      expect(sampleLaplaceNoise(1, 1, () => 0.75)).toBeCloseTo(Math.log(2));
+      expect(sampleLaplaceNoise(1, 1, () => 0.25)).toBeCloseTo(-Math.log(2));
+      expect(sampleLaplaceNoise(0.5, 2, () => 0.75)).toBeCloseTo(4 * Math.log(2));
+    });
+
+    it("has the expected zero mean and Laplace mean absolute deviation", () => {
+      let seed = 0xdecafbad;
+      const seededRandom = () => {
+        seed = (1664525 * seed + 1013904223) >>> 0;
+        return seed / 0x1_0000_0000;
+      };
+      const samples = Array.from({ length: 20_000 }, () => sampleLaplaceNoise(0.5, 1, seededRandom));
+      const mean = samples.reduce((sum, value) => sum + value, 0) / samples.length;
+      const meanAbsolute = samples.reduce((sum, value) => sum + Math.abs(value), 0) / samples.length;
+
+      expect(Math.abs(mean)).toBeLessThan(0.08);
+      // Laplace scale b = sensitivity / epsilon = 2, and E[|X|] = b.
+      expect(meanAbsolute).toBeGreaterThan(1.85);
+      expect(meanAbsolute).toBeLessThan(2.15);
+    });
+
+    it("bounds a released count after adding noise", () => {
+      expect(privatizeCount(0, 1, () => 0.25)).toBe(0);
+      expect(privatizeCount(5, 1, () => 0.5)).toBe(5);
+      expect(privatizeCount(5, 1, () => 0.75)).toBe(6);
+    });
+  });
+
+  describe("Private batch reporting", () => {
+    it("sends noisy allowlisted aggregates without event-level fields", async () => {
+      analyticsManager.initialize({ epsilon: 0.5, dailyPrivacyBudget: 2 });
+      analyticsManager.recordEvent("user.session_start", {
+        event_type: "session",
+        feature: "dashboard",
+      }, 987654);
+      analyticsManager.recordEvent("user.session_start", {
+        event_type: "session",
+        feature: "wallet-address-must-not-be-sent",
+      }, 987654);
+
+      await analyticsManager.flush();
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const payload = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+      expect(payload.privacy).toMatchObject({ mechanism: "Laplace", epsilon: 0.5 });
+      expect(payload.metrics).toHaveLength(1);
+      expect(payload.metrics[0]).toMatchObject({
+        type: "event",
+        name: "user.session_start",
+      });
+      expect(payload.metrics[0].dimensions).toEqual({});
+      expect(payload.metrics[0].metadata).toBeUndefined();
+      expect(payload.metrics[0].timestamp % 86_400_000).toBe(0);
+      expect(JSON.stringify(payload)).not.toContain("wallet-address-must-not-be-sent");
+      expect(JSON.stringify(payload)).not.toContain("987654");
+      expect(analyticsManager.getPrivacyAuditLog().remaining).toBe(1.5);
+    });
+
+    it("stops releasing reports when the daily epsilon budget is exhausted", async () => {
+      analyticsManager.initialize({ epsilon: 0.5, dailyPrivacyBudget: 0.5 });
+
+      analyticsManager.recordEvent("user.session_start", { event_type: "session" });
+      await analyticsManager.flush();
+      analyticsManager.recordEvent("user.session_start", { event_type: "session" });
+      await analyticsManager.flush();
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(analyticsManager.getPrivacyAuditLog().remaining).toBe(0);
+      const entries = analyticsManager.getPrivacyAuditLog().entries;
+      expect(entries[entries.length - 1]?.status).toBe("budget_exhausted");
     });
   });
 });

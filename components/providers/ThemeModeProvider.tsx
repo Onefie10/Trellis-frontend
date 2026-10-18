@@ -15,14 +15,19 @@ import rtlPlugin from 'stylis-plugin-rtl';
 import i18n, { isRtlLanguage } from '@/lib/i18n';
 
 export type ThemeMode = 'light' | 'dark';
+export type ThemeTokens = { primary: string; secondary: string; background: string };
 
 type ThemeModeContextValue = {
   mode: ThemeMode;
   setMode: (mode: ThemeMode) => void;
   toggleMode: () => void;
+  tokens: ThemeTokens;
+  setTokens: (tokens: ThemeTokens) => void;
 };
 
 const STORAGE_KEY = 'trellis-theme-mode';
+const TOKENS_KEY = 'trellis-theme-tokens';
+const DEFAULT_TOKENS: ThemeTokens = { primary: '#4FBF9B', secondary: '#F0B460', background: '#0E1A16' };
 
 const ThemeModeContext = createContext<ThemeModeContextValue | undefined>(undefined);
 
@@ -53,7 +58,7 @@ function syncThemeAttribute(mode: ThemeMode) {
   document.documentElement.style.colorScheme = mode;
 }
 
-function buildTheme(mode: ThemeMode, direction: 'ltr' | 'rtl') {
+function buildTheme(mode: ThemeMode, direction: 'ltr' | 'rtl', tokens: ThemeTokens) {
   const isDark = mode === 'dark';
 
   return createTheme({
@@ -61,16 +66,16 @@ function buildTheme(mode: ThemeMode, direction: 'ltr' | 'rtl') {
     palette: {
       mode,
       primary: {
-        main: isDark ? '#4FBF9B' : '#1C6B55',
+        main: tokens.primary,
         // Dark-mode vine is a light green: ink text on it, not white (white is 2.3:1).
         contrastText: isDark ? '#14201C' : '#FFFFFF',
       },
       secondary: {
-        main: isDark ? '#F0B460' : '#E39A3C',
+        main: tokens.secondary,
         contrastText: '#14201C',
       },
       background: {
-        default: isDark ? '#0E1A16' : '#F7F5F0',
+        default: tokens.background,
         paper: isDark ? '#13221D' : '#FFFFFF',
       },
       text: {
@@ -134,6 +139,10 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
   const [direction, setDirection] = useState<'ltr' | 'rtl'>(() =>
     isRtlLanguage(i18n.language) ? 'rtl' : 'ltr'
   );
+  const [tokens, setTokens] = useState<ThemeTokens>(() => {
+    if (typeof window === 'undefined') return DEFAULT_TOKENS;
+    try { return { ...DEFAULT_TOKENS, ...JSON.parse(window.localStorage.getItem(TOKENS_KEY) || '{}') }; } catch { return DEFAULT_TOKENS; }
+  });
 
   useEffect(() => {
     const handleLanguageChange = (lng: string) => {
@@ -161,20 +170,23 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
       // Ignore storage failures so the theme still works.
     }
   }, [mode]);
+  useEffect(() => { try { window.localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens)); } catch { /* private mode */ } }, [tokens]);
 
   const toggleMode = useCallback(() => {
     setMode((currentMode) => (currentMode === 'dark' ? 'light' : 'dark'));
   }, []);
 
-  const theme = useMemo(() => buildTheme(mode, direction), [mode, direction]);
+  const theme = useMemo(() => buildTheme(mode, direction, tokens), [mode, direction, tokens]);
 
   const value = useMemo(
     () => ({
       mode,
       setMode,
       toggleMode,
+      tokens,
+      setTokens,
     }),
-    [mode, toggleMode]
+    [mode, toggleMode, tokens]
   );
 
   const content = (

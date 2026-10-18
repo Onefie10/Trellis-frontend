@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import ClientProviders from '@/components/providers/ClientProviders';
 import Navigation from '@/components/Navigation';
+import OfflineBanner from '@/components/OfflineBanner';
 import PWAInstall from '@/components/PWAInstall';
 import { Toaster } from 'sonner';
 
@@ -121,6 +122,8 @@ function RootLayout({ children }: { children: React.ReactNode }) {
             <Navigation />
             {children}
           </div>
+
+          <OfflineBanner />
 
           <Toaster richColors position="bottom-right" />
         </ClientProviders>

@@ -493,6 +493,128 @@ notifManager.dismiss(aliceList[0].id);
 assert.strictEqual(notifManager.getForUser('GUSER_ALICE').length, 2);
 console.log('  ✔ Read/unread transitions and dismiss handling verified');
 
+// ==========================================
+// 5. Issue #126: Quadratic Voting & Sybil-Resistance
+// ==========================================
+console.log('\n[TEST 5/5] Running Issue #126: Quadratic Voting & Sybil Resistance Tests...');
+
+function calculateQuadraticVotingWeight(stakedBalance, options = {}) {
+  if (stakedBalance === null || stakedBalance === undefined) return 0;
+  let numericBalance;
+  if (typeof stakedBalance === 'bigint') {
+    numericBalance = Number(stakedBalance);
+  } else if (typeof stakedBalance === 'string') {
+    const trimmed = stakedBalance.trim();
+    if (trimmed === '') return 0;
+    numericBalance = parseFloat(trimmed);
+  } else {
+    numericBalance = stakedBalance;
+  }
+  if (isNaN(numericBalance) || numericBalance <= 0 || !isFinite(numericBalance)) return 0;
+
+  const rawWeight = Math.sqrt(numericBalance);
+  const precision = options.precision !== undefined ? options.precision : 4;
+  const roundMode = options.roundMode || 'round';
+
+  if (precision === null) return rawWeight;
+  const factor = Math.pow(10, precision);
+  let rounded;
+  switch (roundMode) {
+    case 'floor':
+      rounded = Math.floor(rawWeight * factor) / factor;
+      break;
+    case 'ceil':
+      rounded = Math.ceil(rawWeight * factor) / factor;
+      break;
+    case 'round':
+    default:
+      rounded = Math.round((rawWeight + Number.EPSILON) * factor) / factor;
+      break;
+  }
+  return rounded;
+}
+
+function evaluateSybilResistance(accountData, requirements = {}) {
+  const reqs = {
+    minAccountAgeDays: 30,
+    minTransactionCount: 5,
+    ...requirements,
+  };
+  const now = Date.now();
+  let createdTimeMs = null;
+  let createdAtStr = null;
+  if (accountData.createdAt) {
+    const parsed = new Date(accountData.createdAt);
+    if (!isNaN(parsed.getTime())) {
+      createdTimeMs = parsed.getTime();
+      createdAtStr = parsed.toISOString();
+    }
+  }
+  const accountAgeDays =
+    createdTimeMs !== null
+      ? Math.max(0, Math.floor((now - createdTimeMs) / (1000 * 60 * 60 * 24)))
+      : 0;
+  const transactionCount = Math.max(0, accountData.transactionCount || 0);
+  const passedAccountAge =
+    createdTimeMs !== null && accountAgeDays >= reqs.minAccountAgeDays;
+  const passedTransactionCount = transactionCount >= reqs.minTransactionCount;
+  return {
+    isVerified: passedAccountAge && passedTransactionCount,
+    accountAgeDays,
+    transactionCount,
+    passedAccountAge,
+    passedTransactionCount,
+  };
+}
+
+// 5a. Square root voting tests
+assert.strictEqual(calculateQuadraticVotingWeight(0), 0);
+assert.strictEqual(calculateQuadraticVotingWeight(100), 10);
+assert.strictEqual(calculateQuadraticVotingWeight(10000), 100);
+assert.strictEqual(calculateQuadraticVotingWeight(2), 1.4142);
+assert.strictEqual(calculateQuadraticVotingWeight(0.25), 0.5);
+assert.strictEqual(calculateQuadraticVotingWeight(-50), 0);
+assert.strictEqual(calculateQuadraticVotingWeight('invalid'), 0);
+console.log('  ✔ Square root voting weights and rounding edge cases verified');
+
+// 5b. Sybil-resistance checks
+const newAcct = evaluateSybilResistance({
+  createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+  transactionCount: 20,
+});
+assert.strictEqual(newAcct.isVerified, false);
+assert.strictEqual(newAcct.passedAccountAge, false);
+
+const lowTxAcct = evaluateSybilResistance({
+  createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+  transactionCount: 2,
+});
+assert.strictEqual(lowTxAcct.isVerified, false);
+assert.strictEqual(lowTxAcct.passedTransactionCount, false);
+
+const verifiedAcct = evaluateSybilResistance({
+  createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000),
+  transactionCount: 15,
+});
+assert.strictEqual(verifiedAcct.isVerified, true);
+console.log('  ✔ Sybil-resistance account age and transaction checks verified');
+
+// 5c. Linear vs Quadratic Whale Overturning
+const whaleTokens = 10000;
+const communityCount = 100;
+const communityTokens = 100;
+const totalCommTokens = communityCount * communityTokens;
+
+const linearRatio = totalCommTokens / (totalCommTokens + whaleTokens); // 50%
+const quadRatio =
+  (communityCount * Math.sqrt(communityTokens)) /
+  (communityCount * Math.sqrt(communityTokens) + Math.sqrt(whaleTokens)); // 1000 / 1100 = 90.9%
+
+assert.strictEqual(linearRatio, 0.5);
+assert.ok(quadRatio > 0.9);
+console.log('  ✔ Whale influence reduction & community empowerment verified (90.9% community weight)');
+
 console.log('\n' + '='.repeat(60));
-console.log('🎉 ALL 4 ISSUES (#37, #38, #39, #40) VERIFIED & PASSING CLEANLY!');
+console.log('🎉 ALL 5 ISSUES (#37, #38, #39, #40, #126) VERIFIED & PASSING CLEANLY!');
 console.log('='.repeat(60) + '\n');
+

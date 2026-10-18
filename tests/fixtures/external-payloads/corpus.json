@@ -1,0 +1,52 @@
+{
+  "webhookCases": [
+    {
+      "name": "invalid signature",
+      "payload": "{\"event\":\"delivery.updated\"}",
+      "headers": { "x-webhook-signature": "00", "x-webhook-timestamp": "{{now}}" },
+      "expectedCode": "INVALID_SIGNATURE"
+    },
+    {
+      "name": "missing signature",
+      "payload": "{\"event\":\"delivery.updated\"}",
+      "headers": { "x-webhook-timestamp": "{{now}}" },
+      "expectedCode": "MISSING_SIGNATURE"
+    },
+    {
+      "name": "missing timestamp",
+      "payload": "{\"event\":\"delivery.updated\"}",
+      "headers": { "x-webhook-signature": "00" },
+      "expectedCode": "MISSING_TIMESTAMP"
+    },
+    {
+      "name": "malformed timestamp",
+      "payload": "{\"event\":\"delivery.updated\"}",
+      "headers": { "x-webhook-signature": "00", "x-webhook-timestamp": "{{now}}junk" },
+      "expectedCode": "INVALID_TIMESTAMP"
+    },
+    {
+      "name": "oversized payload",
+      "payloadBytes": 1048577,
+      "headers": { "x-webhook-signature": "00", "x-webhook-timestamp": "{{now}}" },
+      "expectedCode": "PAYLOAD_TOO_LARGE"
+    },
+    {
+      "name": "oversized event ID",
+      "payload": "{\"event\":\"delivery.updated\"}",
+      "headers": { "x-webhook-signature": "00", "x-webhook-timestamp": "{{now}}", "x-webhook-event-id": "{{longEventId}}" },
+      "expectedCode": "INVALID_EVENT_ID"
+    }
+  ],
+  "replayCase": {
+    "name": "replayed event ID",
+    "payload": "{\"event\":\"delivery.updated\"}",
+    "headers": { "x-webhook-signature": "{{valid}}", "x-webhook-timestamp": "{{now}}", "x-webhook-event-id": "fixture-replay-001" },
+    "expectedSequence": ["valid", "DUPLICATE_EVENT"]
+  },
+  "schemaDriftCase": {
+    "name": "metrics response missing required panels field",
+    "contract": "GET /api/metrics/panels",
+    "response": { "source": "prometheus", "series": [] },
+    "expectedValid": false
+  }
+}
