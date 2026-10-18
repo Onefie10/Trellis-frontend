@@ -147,6 +147,26 @@ describe('executeIdempotent', () => {
     await expect(run(async () => 'queued')).rejects.toThrow(IdempotencyInProgressError);
   });
 
+  test('cross-tab lock contention refuses duplicate attempt', async () => {
+    const originalLocks = global.navigator?.locks;
+    Object.defineProperty(global, 'navigator', {
+      value: {
+        locks: {
+          request: jest.fn(async (name, options, callback) => {
+             // Simulate lock already held by another tab
+             return callback(null);
+          })
+        }
+      },
+      writable: true
+    });
+
+    await expect(run(async () => 'queued')).rejects.toThrow(IdempotencyInProgressError);
+    expect(global.navigator.locks.request).toHaveBeenCalledWith('trellis:idempotency:key-1', { ifAvailable: true }, expect.any(Function));
+
+    Object.defineProperty(global, 'navigator', { value: { locks: originalLocks }, writable: true });
+  });
+
   test('an abandoned in-progress attempt is retried once it goes stale', async () => {
     store.set('key-1', {
       key: 'key-1',

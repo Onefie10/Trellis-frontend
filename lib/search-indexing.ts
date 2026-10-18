@@ -30,6 +30,8 @@ export interface IndexedRecord {
   id: string;
   visibility: 'public' | 'restricted' | 'hidden';
   visibleTo?: string[];
+  requiredRoles?: string[];
+  organizationId?: string;
   indexed_at: number;
   [key: string]: unknown;
 }
@@ -49,6 +51,47 @@ export interface RepairJob {
   recordsChecked: number;
   recordsFixed: number;
   errors: string[];
+  recommendations?: IndexRepairRecommendation[];
+}
+
+export interface IndexRepairRecommendation {
+  recordId: string;
+  evidence: 'missing-index-entry' | 'visibility-mismatch' | 'permission-scope-mismatch' | 'consistent';
+  action: 'create-or-update' | 'remove' | 'none';
+}
+
+/** Compare authoritative record permissions with the indexed snapshot. */
+export function recommendIndexRepair(
+  record: IndexableRecord,
+  permissions: PermissionConstraint,
+  indexedEntry?: IndexedRecord,
+): IndexRepairRecommendation {
+  const shouldIndex = shouldIndexRecord(record, permissions);
+  if (!indexedEntry) {
+    if (!shouldIndex) {
+      return { recordId: record.id, evidence: 'consistent', action: 'none' };
+    }
+    return {
+      recordId: record.id,
+      evidence: 'missing-index-entry',
+      action: shouldIndex ? 'create-or-update' : 'none',
+    };
+  }
+  if (!shouldIndex) {
+    return { recordId: record.id, evidence: 'visibility-mismatch', action: 'remove' };
+  }
+  const expectedVisibility = getRecordVisibility(record, permissions);
+  if (indexedEntry.visibility !== expectedVisibility) {
+    return { recordId: record.id, evidence: 'visibility-mismatch', action: 'create-or-update' };
+  }
+  if (
+    JSON.stringify(indexedEntry.visibleTo) !== JSON.stringify(permissions.visibleTo) ||
+    JSON.stringify(indexedEntry.requiredRoles) !== JSON.stringify(permissions.requiredRoles) ||
+    indexedEntry.organizationId !== permissions.organizationId
+  ) {
+    return { recordId: record.id, evidence: 'permission-scope-mismatch', action: 'create-or-update' };
+  }
+  return { recordId: record.id, evidence: 'consistent', action: 'none' };
 }
 
 /**
@@ -118,6 +161,8 @@ export function createIndexEntry(
     id: record.id,
     visibility,
     visibleTo: permissions.visibleTo,
+    requiredRoles: permissions.requiredRoles,
+    organizationId: permissions.organizationId,
     indexed_at: Date.now(),
     ...record,
     ...additionalMetadata,
@@ -193,7 +238,9 @@ export function isIndexConsistent(
   if (expectedShouldIndex) {
     return (
       indexedEntry.visibility === expectedVisibility &&
-      JSON.stringify(indexedEntry.visibleTo) === JSON.stringify(permissions.visibleTo)
+      JSON.stringify(indexedEntry.visibleTo) === JSON.stringify(permissions.visibleTo) &&
+      JSON.stringify(indexedEntry.requiredRoles) === JSON.stringify(permissions.requiredRoles) &&
+      indexedEntry.organizationId === permissions.organizationId
     );
   } else {
     // If record shouldn't be indexed, presence of entry is inconsistent
@@ -220,6 +267,7 @@ export class SearchIndexRepair {
       recordsChecked: 0,
       recordsFixed: 0,
       errors: [],
+      recommendations: [],
     };
   }
 
@@ -257,7 +305,9 @@ export class SearchIndexRepair {
         }
 
         // Check consistency
-        if (!isIndexConsistent(record, permissions, indexedEntry as IndexedRecord)) {
+        const recommendation = recommendIndexRepair(record, permissions, indexedEntry);
+        this.job.recommendations?.push(recommendation);
+        if (recommendation.action !== 'none') {
           await this.repairRecord(record, permissions, indexedEntry);
           this.job.recordsFixed++;
         }
@@ -394,4 +444,144 @@ export function createSearchIndexConfig(
     sortableFields: sortableFields || [],
     facets: ['visibility', 'organizationId'],
   };
+}
+
+/**
+ * Permission fields that affect how a record is indexed beyond its searchable
+ * content. A change in any of these requires the index entry to be refreshed
+ * even when the searchable content itself is unchanged.
+ */
+const VISIBILITY_FIELDS: Array<keyof PermissionConstraint> = [
+  'isPublic',
+  'visibleTo',
+  'requiredRoles',
+  'organizationId',
+];
+
+function permissionsEqual(
+  a: PermissionConstraint,
+  b: PermissionConstraint
+): boolean {
+  return VISIBILITY_FIELDS.every(
+    (field) => JSON.stringify(a[field]) === JSON.stringify(b[field])
+  );
+}
+
+/**
+ * Diff detector: does this mutation change anything the search index cares
+ * about? Returns true when a searchable field changed or the visibility /
+ * permission scope changed, meaning the single record must be re-indexed
+ * (or removed). When nothing relevant changed the caller can skip re-indexing.
+ */
+export function hasIndexableChanges(
+  newRecord: IndexableRecord,
+  permissions: PermissionConstraint,
+  oldRecord: IndexableRecord,
+  searchableFields: string[],
+  oldPermissions?: PermissionConstraint
+): boolean {
+  const fieldsChanged = searchableFields.some(
+    (field) => JSON.stringify(oldRecord[field]) !== JSON.stringify(newRecord[field])
+  );
+  if (fieldsChanged) {
+    return true;
+  }
+
+  const previousPermissions = oldPermissions ?? permissions;
+  const oldVisibility = getRecordVisibility(oldRecord, previousPermissions);
+  const newVisibility = getRecordVisibility(newRecord, permissions);
+  if (oldVisibility !== newVisibility) {
+    return true;
+  }
+
+  return !permissionsEqual(previousPermissions, permissions);
+}
+
+/**
+ * Update an existing record in the search index incrementally.
+ *
+ * Rather than re-indexing the whole dataset, a diff detector compares the
+ * previous record state against the new one and only touches this single
+ * record's index entry:
+ *  - searchable field changed  -> single-record saveObject
+ *  - visibility/permissions changed -> single-record saveObject or removal
+ *  - nothing relevant changed  -> no-op (full rebuild avoided)
+ *
+ * `oldPermissions` is the permission state the record was last indexed under;
+ * pass it when permissions changed alongside the record so visibility
+ * transitions (e.g. a record becoming hidden) are detected.
+ */
+export async function updateRecord(
+  newRecord: IndexableRecord,
+  permissions: PermissionConstraint,
+  oldRecord?: IndexableRecord,
+  searchClient?: SearchClient,
+  indexName?: string,
+  searchableFields?: string[],
+  oldPermissions?: PermissionConstraint
+): Promise<void> {
+  if (!searchClient || !indexName) {
+    console.info(`[Search Index] Mock incremental update for ${newRecord.id}`);
+    return;
+  }
+
+  // If the previous record state and the searchable field list are known,
+  // detect whether anything the index cares about actually changed.
+  if (oldRecord && searchableFields) {
+    const changed = hasIndexableChanges(
+      newRecord,
+      permissions,
+      oldRecord,
+      searchableFields,
+      oldPermissions
+    );
+
+    if (!changed) {
+      console.info(`[Search Index] No indexable changes detected for ${newRecord.id}, skipping update`);
+      return;
+    }
+  }
+
+  const shouldIndex = shouldIndexRecord(newRecord, permissions);
+
+  try {
+    if (shouldIndex) {
+      const entry = createIndexEntry(newRecord, permissions);
+      if (entry) {
+        await searchClient.saveObject({
+          indexName,
+          body: entry,
+        });
+      }
+    } else {
+      await deleteRecord(newRecord.id, searchClient, indexName);
+    }
+  } catch (error) {
+    console.error(`[Search Index] Failed to incrementally update record ${newRecord.id}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Delete a single record from the search index.
+ */
+export async function deleteRecord(
+  recordId: string,
+  searchClient?: SearchClient,
+  indexName?: string
+): Promise<void> {
+  if (!searchClient || !indexName) {
+    console.info(`[Search Index] Mock delete record for ${recordId}`);
+    return;
+  }
+
+  try {
+    await searchClient.deleteObject({
+      indexName,
+      objectID: recordId,
+    });
+  } catch (error) {
+    console.error(`[Search Index] Failed to delete record ${recordId}:`, error);
+    throw error;
+  }
 }

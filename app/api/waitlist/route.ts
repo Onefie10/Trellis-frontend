@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { csrfMiddleware } from '@/lib/security/csrf';
 
 // In-memory storage for demo purposes
 // In production, you'd want to use a database
@@ -11,6 +12,9 @@ interface WaitlistEntry {
 const waitlistEntries: WaitlistEntry[] = [];
 
 export async function POST(request: NextRequest) {
+  const csrfError = csrfMiddleware(request);
+  if (csrfError) return csrfError;
+
   try {
     const { email, walletAddress } = await request.json();
 

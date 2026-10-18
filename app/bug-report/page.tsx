@@ -1,13 +1,28 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import BugReportForm from '../../components/BugReportForm';
-import { type BugReportFormData } from '../../types/bug-report';
+import { type BugReport, type BugReportFormData } from '../../types/bug-report';
 
 const BugReportPage = () => {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+
+  const { data: existingReports = [] } = useQuery<BugReport[]>({
+    queryKey: ['bug-reports-for-dedupe'],
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/bug-reports?limit=50');
+        if (!response.ok) return [];
+        const json = await response.json();
+        return (json.bugReports ?? []) as BugReport[];
+      } catch {
+        // Duplicate detection is a helpful warning, never a submission blocker.
+        return [];
+      }
+    },
+  });
 
   const submitBugReport = async (data: BugReportFormData): Promise<void> => {
     // This would be replaced with actual API call
@@ -21,6 +36,7 @@ const BugReportPage = () => {
     formData.append('priority', data.priority);
     formData.append('category', data.category);
     formData.append('reporterEmail', data.reporterEmail || '');
+    formData.append('buildVersion', data.buildVersion || '');
     formData.append('agreeToTerms', data.agreeToTerms.toString());
 
     // Append screenshots
@@ -165,6 +181,7 @@ const BugReportPage = () => {
         <BugReportForm
           onSubmit={handleSubmit}
           isSubmitting={mutation.isPending}
+          existingReports={existingReports}
         />
 
         <div className="mt-12 text-center">

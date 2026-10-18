@@ -1,8 +1,10 @@
 import * as StellarSdk from "@stellar/stellar-sdk";
-import { SorobanContract } from "./client";
+import { SorobanContract, decodeSimulationError } from "./client";
 import { SorobanTransactionResult, ResourceMetrics } from "../types";
 import { STELLAR_NETWORKS } from "../stellar-constants";
 import { notificationManager } from "../notifications";
+
+export const DEFAULT_FEE_BUMP_THRESHOLD = 10000; // Stroops threshold for base fee spike fee bump envelope
 
 export interface TransactionNotificationOptions {
   description?: string;
@@ -10,17 +12,54 @@ export interface TransactionNotificationOptions {
   amount?: string;
   type?: 'trade' | 'transaction' | 'general';
   showNotification?: boolean;
+  feeBumpThreshold?: number;
+  feeSource?: string;
+  maxFee?: number | string;
+  forceFeeBump?: boolean;
 }
 
 /**
- * Enhanced transaction wrapper with notification support
+ * Builds a Fee Bump transaction envelope if minResourceFee or network base fee exceeds threshold
+ */
+export function buildFeeBumpTransactionIfNeeded(
+    transaction: StellarSdk.Transaction,
+    publicKey: string,
+    minResourceFee: number,
+    networkPassphrase: string,
+    options: TransactionNotificationOptions = {}
+): { transaction: StellarSdk.Transaction | StellarSdk.FeeBumpTransaction; isFeeBumped: boolean } {
+    const threshold = options.feeBumpThreshold ?? DEFAULT_FEE_BUMP_THRESHOLD;
+    const forceFeeBump = options.forceFeeBump ?? false;
+
+    if (minResourceFee >= threshold || forceFeeBump) {
+        const feeSource = options.feeSource || publicKey;
+        const innerFee = Number(transaction.fee || 100);
+        const feeToUse = options.maxFee 
+            ? String(options.maxFee) 
+            : String(Math.max(innerFee * 2, minResourceFee * 2, 20000));
+
+        const feeBumpTx = StellarSdk.TransactionBuilder.buildFeeBumpTransaction(
+            feeSource,
+            feeToUse,
+            transaction,
+            networkPassphrase
+        );
+
+        return { transaction: feeBumpTx, isFeeBumped: true };
+    }
+
+    return { transaction, isFeeBumped: false };
+}
+
+/**
+ * Enhanced transaction wrapper with pre-flight simulation and Fee Bump envelope support
  */
 export async function invokeContractWithNotifications(
     contract: SorobanContract,
     functionName: string,
     args: any[],
     publicKey: string,
-    signCallback: (tx: StellarSdk.Transaction) => Promise<{ success: boolean; hash?: string; error?: string }>,
+    signCallback: (tx: StellarSdk.Transaction | StellarSdk.FeeBumpTransaction) => Promise<{ success: boolean; hash?: string; error?: string }>,
     notificationOptions: TransactionNotificationOptions = {}
 ): Promise<SorobanTransactionResult> {
     const {
@@ -32,13 +71,42 @@ export async function invokeContractWithNotifications(
     } = notificationOptions;
 
     try {
-        // 1. Prepare and simulate
-        const { transaction, metrics } = await contract.prepareInvoke(functionName, args, publicKey);
+        // 1. Pre-flight contract simulation call to validate execution and estimate required Soroban resources
+        let simResult;
+        try {
+            simResult = await contract.simulateTransaction(functionName, args, publicKey);
+        } catch (simError: any) {
+            const errorResult: SorobanTransactionResult = {
+                success: false,
+                error: simError.message || "Pre-flight contract simulation failed",
+            };
+            if (showNotification) {
+                await showTransactionNotification(errorResult, description, type, agentName, amount);
+            }
+            return errorResult;
+        }
 
-        // 2. Sign
-        const signResult = await signCallback(transaction);
+        const { transaction: innerTx, metrics, minResourceFee } = simResult;
+
+        // 2. Build Fee Bump transaction envelope when network base fee spikes / exceeds threshold
+        const networkConfig = STELLAR_NETWORKS[contract.network];
+        const { transaction: txToSign, isFeeBumped } = buildFeeBumpTransactionIfNeeded(
+            innerTx,
+            publicKey,
+            minResourceFee,
+            networkConfig.networkPassphrase,
+            notificationOptions
+        );
+
+        // 3. User Wallet Approval & Signing
+        const signResult = await signCallback(txToSign);
         if (!signResult.success) {
-            const errorResult = { success: false, error: signResult.error || "User rejected signing" };
+            const errorResult: SorobanTransactionResult = {
+                success: false,
+                error: signResult.error || "User rejected signing",
+                metrics,
+                isFeeBumped
+            };
             
             // Show notification for signing failure if enabled
             if (showNotification) {
@@ -48,18 +116,18 @@ export async function invokeContractWithNotifications(
             return errorResult;
         }
 
-        // 3. Submit
-        const rpcUrl = STELLAR_NETWORKS[contract.network].rpcUrl ||
-            STELLAR_NETWORKS[contract.network].horizonUrl.replace("horizon", "soroban-rpc");
+        // 4. Submit & Poll status
+        const rpcUrl = networkConfig.rpcUrl ||
+            networkConfig.horizonUrl.replace("horizon", "soroban-rpc");
         const server = new (StellarSdk as any).rpc.Server(rpcUrl);
 
-        // For safety, let's assume we might need to poll if we have a hash
         if (signResult.hash) {
             const waitResult = await pollTransactionStatus(server, signResult.hash);
-            const result = {
+            const result: SorobanTransactionResult = {
                 success: waitResult.status === "SUCCESS",
                 hash: signResult.hash,
                 metrics,
+                isFeeBumped,
                 error: waitResult.error,
             };
 
@@ -71,7 +139,12 @@ export async function invokeContractWithNotifications(
             return result;
         }
 
-        const errorResult = { success: false, error: "Failed to obtain transaction hash" };
+        const errorResult: SorobanTransactionResult = {
+            success: false,
+            error: "Failed to obtain transaction hash",
+            metrics,
+            isFeeBumped
+        };
         
         // Show notification for hash failure if enabled
         if (showNotification) {
@@ -81,7 +154,10 @@ export async function invokeContractWithNotifications(
         return errorResult;
     } catch (error: any) {
         console.error("Invoke Error:", error);
-        const errorResult = { success: false, error: error.message || "Unknown error during invocation" };
+        const errorResult: SorobanTransactionResult = {
+            success: false,
+            error: error.message || "Unknown error during invocation"
+        };
         
         // Show notification for exception if enabled
         if (showNotification) {

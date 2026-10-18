@@ -1,0 +1,144 @@
+{
+  "issues": [
+    {
+      "number": 121,
+      "stage": 6,
+      "title": "Trellis Frontend: Add Soroban transaction simulation pre-flight checks and Fee Bump transaction wrapper",
+      "labels": ["blockchain", "stellar", "enhancement", "architecture"],
+      "body": "`lib/soroban/transactions-with-notifications.ts` sends contract transactions directly without running pre-flight simulation to estimate CPU/RAM footprint or wrapping transactions with Fee Bump envelopes when network base fees surge.\n\n## Why this matters\nSimulating transactions prior to submission prevents user fee loss on transactions destined to fail, while Fee Bump support ensures critical operations complete during high network congestion.\n\n## Tasks\n- [ ] Add pre-flight contract simulation call (`simulateTransaction`) in `lib/soroban/transactions-with-notifications.ts`\n- [ ] Estimate required Soroban resources (CPU instructions, memory bytes, read/write ledger entries)\n- [ ] Implement Fee Bump transaction builder (`TransactionBuilder.buildFeeBumpTransaction`) when network base fee spikes\n- [ ] Add unit tests verifying simulation error decoding and Fee Bump envelope construction\n\n## Files to look at\n- `lib/soroban/transactions-with-notifications.ts`\n- `lib/soroban/transactions.ts`\n- `lib/soroban/client.ts`\n\n## Acceptance criteria\n- Contract transactions execute pre-flight simulation and display resource estimates before wallet approval\n- High-fee transactions automatically wrap with Fee Bump envelopes when base fees exceed thresholds"
+    },
+    {
+      "number": 122,
+      "stage": 6,
+      "title": "Trellis Frontend: Build dynamic UI form generator from Soroban contract ABI specification",
+      "labels": ["blockchain", "stellar", "frontend", "developer-experience"],
+      "body": "`lib/soroban/spec.ts` parses contract specifications, but does not render interactive input fields matching contract function arguments (`Symbol`, `Address`, `Vec`, `Map`, `u128`).\n\n## Why this matters\nGenerating UI forms directly from contract ABI specs allows developers to interact with custom Soroban smart contracts without writing bespoke React form components.\n\n## Tasks\n- [ ] Build dynamic form generator in `lib/soroban/spec.ts` rendering appropriate input controls per Soroban ScVal type\n- [ ] Add type validation and format checkers for Stellar addresses (`G...`, `C...`) and numeric range bounds\n- [ ] Serialize user inputs into valid XDR `ScVal` structures for transaction building\n- [ ] Write unit tests verifying form serialization for complex nested `Map` and `Vec` arguments\n\n## Files to look at\n- `lib/soroban/spec.ts`\n- `components/`\n- `features/soroban/`\n\n## Acceptance criteria\n- Contract ABI specifications dynamically render type-safe React input forms\n- Input values serialize cleanly into Soroban `ScVal` parameters"
+    },
+    {
+      "number": 123,
+      "stage": 6,
+      "title": "Trellis Frontend: Implement WebRTC Data Channel fallback for low-latency agent telemetry streaming",
+      "labels": ["telemetry", "realtime", "enhancement", "performance"],
+      "body": "`features/agent-telemetry/` streams metrics over WebSockets, which can experience head-of-line blocking and server bandwidth bottlenecks during high-frequency agent execution streaming.\n\n## Why this matters\nWebRTC Data Channels (unordered/unreliable mode) offer peer-to-peer low-latency streaming ideal for real-time telemetry metrics and agent step logs.\n\n## Tasks\n- [ ] Implement WebRTC PeerConnection negotiator in `features/agent-telemetry/` with WebSocket fallback\n- [ ] Add ICE candidate gathering and STUN/TURN server fallback configuration\n- [ ] Stream high-frequency telemetry metrics over un-ordered WebRTC DataChannel\n- [ ] Add unit tests for WebRTC connection state transitions and fallback switching\n\n## Files to look at\n- `features/agent-telemetry/`\n- `scripts/telemetry-ws-server.mjs`\n\n## Acceptance criteria\n- Telemetry client establishes WebRTC DataChannel when available, falling back to WebSocket\n- High-frequency metrics stream with reduced latency and server memory overhead"
+    },
+    {
+      "number": 124,
+      "stage": 6,
+      "title": "Trellis Frontend: Integrate Transformers.js client-side vector search for semantic agent discovery",
+      "labels": ["frontend", "enhancement", "ai", "ui"],
+      "body": "`features/agent-discovery/` uses text keyword matching. Users searching for agents using natural language concepts (e.g., 'financial audit assistant' vs 'contract linter') fail to match relevant listings.\n\n## Why this matters\nClient-side semantic vector search enables natural language query matching without relying on external third-party vector databases.\n\n## Tasks\n- [ ] Integrate `@xenova/transformers` in `features/agent-discovery/` using lightweight ONNX embeddings model (e.g. `all-MiniLM-L6-v2`)\n- [ ] Generate client-side vector embeddings for agent titles, categories, and descriptions\n- [ ] Implement cosine similarity ranking for search queries\n- [ ] Add unit tests verifying semantic search similarity scoring\n\n## Files to look at\n- `features/agent-discovery/`\n- `store/searchStore.ts`\n- `app/marketplace/page.tsx`\n\n## Acceptance criteria\n- Natural language search queries match semantically relevant agents even without exact keyword overlap\n- Vector embedding pipeline executes efficiently in browser WebAssembly runtime"
+    },
+    {
+      "number": 125,
+      "stage": 6,
+      "title": "Trellis Frontend: Add automated changelog generator from git commits for agent version releases",
+      "labels": ["developer-experience", "enhancement", "documentation"],
+      "body": "`features/agent-versioning/` tracks release versions but requires authors to manually write release notes without generating draft release notes from git history or pull requests.\n\n## Why this matters\nAutomating changelog compilation speeds up agent release cycles and ensures consistent version history documentation.\n\n## Tasks\n- [ ] Build commit log parser in `features/agent-versioning/` categorizing Conventional Commits (`feat:`, `fix:`, `docs:`, `perf:`)\n- [ ] Generate formatted Markdown release notes with pull request and issue reference links\n- [ ] Add editable release notes preview component prior to version publishing\n- [ ] Add unit tests for commit message classification and Markdown formatting\n\n## Files to look at\n- `features/agent-versioning/`\n- `app/create/page.tsx`\n\n## Acceptance criteria\n- New agent release drafts populate with categorized release notes generated from commit history\n- Authors can edit and customize generated Markdown changelogs before release publishing"
+    },
+    {
+      "number": 126,
+      "stage": 6,
+      "title": "Trellis Frontend: Implement quadratic voting weight calculator and Sybil-resistance checks in DAO",
+      "labels": ["blockchain", "governance", "stellar", "enhancement"],
+      "body": "`features/governance/` calculates proposal votes linearly (`1 token = 1 vote`), allowing large whale accounts to single-handedly dictate DAO proposal outcomes.\n\n## Why this matters\nQuadratic voting (`voting_power = sqrt(tokens)`) balances voting influence between large token holders and broader community members.\n\n## Tasks\n- [ ] Implement quadratic voting weight calculator in `features/governance/` (`Math.sqrt(staked_balance)`)\n- [ ] Add Sybil-resistance verification check (requiring verified account age or minimum transaction history)\n- [ ] Render side-by-side comparison of linear vs quadratic voting tallies on proposal detail views\n- [ ] Add unit tests verifying square root voting calculations and rounding edge cases\n\n## Files to look at\n- `features/governance/`\n- `app/governance/`\n- `lib/governance/`\n\n## Acceptance criteria\n- Governance proposal votes apply quadratic weight scaling to user token balances\n- Proposal views display clear quadratic vote distribution graphs"
+    },
+    {
+      "number": 127,
+      "stage": 6,
+      "title": "Trellis Frontend: Build Zero-Knowledge (ZK-SNARK) proof verifier for agent execution attestations",
+      "labels": ["blockchain", "security", "provenance", "enhancement"],
+      "body": "`features/provenance/` verifies execution proofs via Merkle trees, but lacks support for Zero-Knowledge (ZK-SNARK) proofs where an agent proves correct computation without revealing input data.\n\n## Why this matters\nZK proofs enable confidential AI agent execution verification on public blockchains for proprietary or sensitive data.\n\n## Tasks\n- [ ] Integrate lightweight WASM ZK proof verifier (e.g. `snarkjs` / `groth16`) in `features/provenance/`\n- [ ] Verify ZK proof signals, verification keys, and public input parameters client-side\n- [ ] Render cryptographic verification badge and ZK proof detail inspector\n- [ ] Add unit tests for valid and invalid ZK proof verification\n\n## Files to look at\n- `features/provenance/`\n- `app/provenance/`\n- `lib/provenance/`\n\n## Acceptance criteria\n- Frontend verifies ZK-SNARK execution proofs in browser WASM runtime\n- Invalid ZK proofs display clear cryptographic verification failure notices"
+    },
+    {
+      "number": 128,
+      "stage": 6,
+      "title": "Trellis Frontend: Build vanity URL shortener and click analytics tracker for referral links",
+      "labels": ["frontend", "analytics", "enhancement", "referral"],
+      "body": "`features/referral-sharing/` and `store/referralStore.ts` generate long referral URLs containing query parameters that look unappealing when shared.\n\n## Why this matters\nClean vanity referral URLs (e.g., `trellis.market/r/alice-agent`) improve link trust, click-through rates, and shareability.\n\n## Tasks\n- [ ] Build vanity slug manager in `features/referral-sharing/` allowing users to register custom referral aliases\n- [ ] Add click analytics tracker recording referrer source, device type, and conversion status\n- [ ] Render click-through rate (CTR) and conversion chart on the affiliate dashboard\n- [ ] Add unit tests for vanity slug validation and collision handling\n\n## Files to look at\n- `features/referral-sharing/`\n- `store/referralStore.ts`\n- `features/affiliate-dashboard/`\n\n## Acceptance criteria\n- Users can create custom vanity referral links pointing to specific marketplace agents\n- Referral dashboard tracks and displays real-time link click metrics"
+    },
+    {
+      "number": 129,
+      "stage": 6,
+      "title": "Trellis Frontend: Implement automated SPDX license compliance scanner for creator submissions",
+      "labels": ["security", "enhancement", "developer-experience"],
+      "body": "`features/submissions-dashboard/` reviews creator submitted agents but does not check dependency licenses for open-source compliance or incompatible copyleft licenses (e.g. GPL vs MIT).\n\n## Why this matters\nAutomated license scanning protects the platform and marketplace users from open-source license infringement.\n\n## Tasks\n- [ ] Build SPDX license identifier scanner in `features/submissions-dashboard/` checking package dependencies\n- [ ] Flag incompatible license combinations (e.g. AGPL components in commercial agent plugins)\n- [ ] Render license compliance breakdown card on the submission inspection view\n- [ ] Add unit tests verifying SPDX expression parsing and license compatibility rules\n\n## Files to look at\n- `features/submissions-dashboard/`\n- `app/submissions/`\n- `lib/security/`\n\n## Acceptance criteria\n- Submissions are automatically audited against an open-source SPDX license policy matrix\n- Incompatible dependency licenses generate clear compliance warnings for maintainers"
+    },
+    {
+      "number": 130,
+      "stage": 6,
+      "title": "Trellis Frontend: Add impermanent loss calculator and pool rebalancing alerts for trading bonuses",
+      "labels": ["blockchain", "stellar", "trading", "enhancement"],
+      "body": "`features/trading-bonuses/` displays liquidity rewards but does not calculate impermanent loss (IL) for volatile asset pairs or alert users when liquidity pools require rebalancing.\n\n## Why this matters\nLiquidity providers need visibility into impermanent loss risk to manage liquidity allocation effectively across Soroban pools.\n\n## Tasks\n- [ ] Implement impermanent loss formula utility in `features/trading-bonuses/` based on asset price divergence\n- [ ] Add interactive price ratio slider showing projected IL across different market price scenarios\n- [ ] Build pool rebalancing notification alert when price divergence exceeds configurable thresholds\n- [ ] Add unit tests verifying IL mathematical calculations against standard AMM formulas\n\n## Files to look at\n- `features/trading-bonuses/`\n- `lib/trading/`\n- `app/trading/`\n\n## Acceptance criteria\n- Trading bonus interface displays real-time impermanent loss metrics for active liquidity positions\n- Interactive slider models accurate IL projections for user-defined price movements"
+    },
+    {
+      "number": 131,
+      "stage": 6,
+      "title": "Trellis Frontend: Implement WebHID Ledger hardware wallet signing adapter for Stellar transactions",
+      "labels": ["blockchain", "stellar", "security", "wallet"],
+      "body": "`features/wallet/` connects to extension wallets but lacks direct WebHID/WebUSB integration for hardware signing using Ledger Nano S/X hardware devices.\n\n## Why this matters\nHardware wallet support allows institutional maintainers and high-value token holders to sign Soroban transactions with cold storage keys.\n\n## Tasks\n- [ ] Integrate `@ledgerhq/hw-app-str` and `@ledgerhq/hw-transport-webhid` in `features/wallet/`\n- [ ] Implement Ledger device connection, bip32 path selection (`m/44'/148'/0'`), and transaction signing flow\n- [ ] Render step-by-step device prompt guide instructing users to confirm transaction details on Ledger screen\n- [ ] Add unit tests for Ledger signature payload parsing and error handling\n\n## Files to look at\n- `features/wallet/`\n- `lib/wallet/`\n- `components/Navigation.tsx`\n\n## Acceptance criteria\n- Users can connect Ledger hardware wallets over WebHID and approve transactions on device\n- Clear instructions guide users through hardware key verification steps"
+    },
+    {
+      "number": 132,
+      "stage": 6,
+      "title": "Trellis Frontend: Build Stale-While-Revalidate (SWR) background revalidation for IPFS and RPC cache",
+      "labels": ["performance", "architecture", "enhancement"],
+      "body": "`lib/cache-manager.ts` caches RPC and IPFS responses but uses static expiration, causing components to block while waiting for fresh data when a cache item expires.\n\n## Why this matters\nStale-While-Revalidate (SWR) caching instantly serves cached data while revalidating fresh state in the background, providing instantaneous UI loads.\n\n## Tasks\n- [ ] Implement SWR caching pattern in `lib/cache-manager.ts` with configurable `staleTime` and `cacheTime`\n- [ ] Trigger non-blocking background fetch when stale data is served to update IndexedDB\n- [ ] Notify active UI subscribers when background revalidation produces updated data\n- [ ] Add unit tests verifying instant cache hits followed by background revalidation triggers\n\n## Files to look at\n- `lib/cache-manager.ts`\n- `tests/`\n\n## Acceptance criteria\n- Cached marketplace and contract queries load instantly from local storage\n- Background revalidation seamlessly updates UI when underlying data changes"
+    },
+    {
+      "number": 133,
+      "stage": 6,
+      "title": "Trellis Frontend: Build automated GitHub issue sync bridge for user-submitted bug reports",
+      "labels": ["developer-experience", "enhancement", "backend-integration"],
+      "body": "`app/bug-reports/` collects bug reports in-app, but maintainers must manually copy issues into GitHub Issue tracking.\n\n## Why this matters\nAutomating GitHub issue creation from verified bug reports keeps open-source contributors aligned with community feedback.\n\n## Tasks\n- [ ] Create GitHub webhook bridge endpoint in `app/api/bug-reports/sync/route.ts`\n- [ ] Format bug report markdown including browser details, console logs, and user steps to reproduce\n- [ ] Post issue to GitHub repository using GitHub REST API upon maintainer approval\n- [ ] Add unit tests for markdown issue payload generation\n\n## Files to look at\n- `app/api/`\n- `app/bug-reports/`\n- `lib/bug-reports-pagination.ts`\n\n## Acceptance criteria\n- Approved bug reports automatically create formatted GitHub issues with label tagging\n- GitHub issue status changes (Closed/Resolved) synchronize back to the in-app bug report status"
+    },
+    {
+      "number": 134,
+      "stage": 6,
+      "title": "Trellis Frontend: Add webhook notification trigger config and email digest preferences in settings",
+      "labels": ["frontend", "ux", "enhancement"],
+      "body": "`app/settings/` and `lib/notifications.ts` manage local alerts but lack configuration for outbound Webhooks (e.g. Discord, Slack, custom HTTP endpoints) or email notification digests.\n\n## Why this matters\nOutbound webhooks allow team maintainers to route critical platform events into their internal developer communication channels.\n\n## Tasks\n- [ ] Build Webhook endpoint manager UI in `app/settings/` allowing users to register webhook target URLs\n- [ ] Add event trigger checkboxes (New Proposal, High Error Rate, Payout Executed, Agent Minted)\n- [ ] Implement webhook payload signer using HMAC-SHA256 secret keys\n- [ ] Add unit tests for HMAC signature header generation\n\n## Files to look at\n- `app/settings/`\n- `lib/notifications.ts`\n- `components/notifications/NotificationCenter.tsx`\n\n## Acceptance criteria\n- Maintainers can configure custom webhook URLs with HMAC secret signatures\n- Selected system events send formatted JSON webhook payloads to external endpoints"
+    },
+    {
+      "number": 135,
+      "stage": 6,
+      "title": "Trellis Frontend: Build real-time WebSockets system health monitor with memory and CPU usage graphs",
+      "labels": ["telemetry", "dashboard", "enhancement"],
+      "body": "`app/dashboard/operations/page.tsx` renders static system metrics without live real-time graphs for client memory consumption, active WebSocket connections, or event loop lag.\n\n## Why this matters\nLive operational telemetry graphs allow maintainers to inspect real-time performance spikes during high-traffic events.\n\n## Tasks\n- [ ] Connect `app/dashboard/operations/page.tsx` to live operational telemetry stream via WebSocket\n- [ ] Add real-time Recharts line graphs for heap memory usage, active connections, and RPC latency\n- [ ] Render visual status indicators when memory usage exceeds warning thresholds\n- [ ] Add unit tests for real-time metric stream buffering\n\n## Files to look at\n- `app/dashboard/operations/page.tsx`\n- `lib/operational-health.ts`\n- `scripts/telemetry-ws-server.mjs`\n\n## Acceptance criteria\n- Operations dashboard displays smooth, real-time updating performance graphs\n- Threshold breaches dynamically highlight warning indicators on the dashboard"
+    },
+    {
+      "number": 136,
+      "stage": 6,
+      "title": "Trellis Frontend: Implement custom theme token editor and visual previewer in user settings",
+      "labels": ["frontend", "ui", "ux"],
+      "body": "`components/providers/ThemeModeProvider.tsx` supports fixed Light and Dark modes but does not allow custom color palette tokens or contrast adjustment for low-vision accessibility.\n\n## Why this matters\nCustom theme tokens empower users and partner organizations to customize marketplace colors according to their brand guidelines or high-contrast accessibility preferences.\n\n## Tasks\n- [ ] Build theme token editor UI in `app/settings/` with color pickers for primary, secondary, and background tokens\n- [ ] Integrate contrast ratio calculator enforcing WCAG AAA (7:1) contrast minimums\n- [ ] Add live UI component previewer displaying updated theme tokens in real time\n- [ ] Add unit tests verifying CSS variable injection and token persistence\n\n## Files to look at\n- `app/settings/`\n- `components/providers/ThemeModeProvider.tsx`\n- `app/globals.css`\n\n## Acceptance criteria\n- Users can edit custom theme colors with real-time live previewing across marketplace components\n- Contrast validator warns users if custom color selections fail WCAG accessibility standards"
+    },
+    {
+      "number": 137,
+      "stage": 6,
+      "title": "Trellis Frontend: Build auto-compounding staking reward executor for Soroban yield pools",
+      "labels": ["blockchain", "stellar", "staking", "enhancement"],
+      "body": "`app/staking/` requires manual harvesting and re-staking of earned yield, increasing gas costs and manual friction for stakers.\n\n## Why this matters\nAutomated compounding increases yield efficiency (APY vs APR) by automatically harvesting and re-staking earned rewards into Soroban pools.\n\n## Tasks\n- [ ] Build auto-compounding contract invocation helper in `lib/staking/` calling harvest + stake in a single transaction\n- [ ] Add APY comparison calculator showing standard yield vs auto-compounded yield projections\n- [ ] Build automated compound trigger option in staking interface\n- [ ] Add unit tests for auto-compound yield compounding calculations\n\n## Files to look at\n- `app/staking/`\n- `lib/staking/`\n- `lib/soroban/`\n\n## Acceptance criteria\n- Staking dashboard provides one-click auto-compound execution for active staking positions\n- Yield projection models accurately reflect compounding frequency impact on net returns"
+    },
+    {
+      "number": 138,
+      "stage": 6,
+      "title": "Trellis Frontend: Implement Token Bucket rate-limiting middleware for Next.js App Router API routes",
+      "labels": ["backend-integration", "security", "performance"],
+      "body": "`app/api/` route handlers lack rate-limiting middleware, exposing public API endpoints (such as search, feedback, and import dry-runs) to denial-of-service or scraping attacks.\n\n## Why this matters\nRate limiting protects backend services and third-party APIs from abuse while ensuring fair resource distribution across all users.\n\n## Tasks\n- [ ] Implement Token Bucket rate-limiting middleware in `lib/security/` using client IP / user token identifiers\n- [ ] Configure rate limit headers (`X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`)\n- [ ] Return standard `429 Too Many Requests` responses with `Retry-After` headers when limits are exceeded\n- [ ] Add unit tests verifying token bucket refill logic and limit enforcement\n\n## Files to look at\n- `app/api/`\n- `lib/security/`\n- `middleware.ts`\n\n## Acceptance criteria\n- Public App Router API endpoints enforce configurable rate limits per IP/user\n- Exceeding request thresholds returns HTTP 429 status with accurate retry headers"
+    },
+    {
+      "number": 139,
+      "stage": 6,
+      "title": "Trellis Frontend: Expand Playwright E2E test matrix across Firefox, WebKit, and mobile viewports",
+      "labels": ["test", "ci", "frontend"],
+      "body": "`playwright.config.ts` currently runs tests against desktop Chromium. App Router pages and MUI components are not automatically verified across Firefox, Safari (WebKit), or mobile viewports.\n\n## Why this matters\nCross-browser E2E testing ensures consistent functionality and layout integrity across diverse user devices and browser engines.\n\n## Tasks\n- [ ] Configure multi-project test matrix in `playwright.config.ts` including Chromium, Firefox, WebKit, and Mobile Chrome/Safari\n- [ ] Add viewport test scenarios for mobile (375x667), tablet (768x1024), and desktop (1440x900)\n- [ ] Fix any cross-browser rendering or touch event discrepancies in marketplace flows\n- [ ] Update `.github/workflows/e2e.yml` to run cross-browser matrix in CI\n\n## Files to look at\n- `playwright.config.ts`\n- `e2e/smoke.spec.ts`\n- `e2e/journey.spec.ts`\n\n## Acceptance criteria\n- Playwright suite executes cleanly across Chromium, Firefox, WebKit, and mobile viewports\n- Cross-browser test runs are automated within GitHub Actions CI"
+    },
+    {
+      "number": 140,
+      "stage": 6,
+      "title": "Trellis Frontend: Add automated bundle size regression analyzer and duplicate dependency scanner",
+      "labels": ["performance", "ci", "developer-experience"],
+      "body": "`package.json` contains numerous dependencies, but build pipeline lacks automated checks detecting bundle size growth or duplicate package versions shipped to the client.\n\n## Why this matters\nProactive bundle size monitoring prevents unintentional library bloat, ensuring fast page load speeds on mobile and low-bandwidth connections.\n\n## Tasks\n- [ ] Create bundle analyzer script in `scripts/` using `@next/bundle-analyzer` or `source-map-explorer`\n- [ ] Add duplicate dependency detector checking `package-lock.json` for duplicated transitive packages\n- [ ] Set strict JS bundle budget limits (e.g. max 250KB initial JS per route)\n- [ ] Fail CI build if a pull request introduces bundle size regressions exceeding configured budgets\n\n## Files to look at\n- `next.config.js`\n- `package.json`\n- `.github/workflows/ci.yml`\n\n## Acceptance criteria\n- Build pipeline reports detailed JS bundle size breakdown per route\n- Pull requests introducing bundle growth beyond budget thresholds fail CI verification"
+    }
+  ]
+}

@@ -266,6 +266,7 @@ After resolution, complete within 24 hours:
 
 ## Related Documentation
 
+- **Incident Drill Runbook**: See `docs/incident-drill-runbook.md` for executable verification checks (`npm run drill:verify`)
 - **Feature Flags**: See `docs/operational-rollout.md` for feature flag configuration
 - **Operational Health**: Dashboard at `/dashboard/operations` for real-time metrics
 - **Error Handling**: See `docs/client-error-handling.md` for taxonomy and recovery

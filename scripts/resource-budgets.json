@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "workloads": {
+    "worstCaseUser": {
+      "records": 10000,
+      "maxRecords": 10000,
+      "maxDurationMs": 5000,
+      "maxHeapGrowthBytes": 67108864
+    },
+    "ledgerHistory": {
+      "records": 50000,
+      "maxRecords": 50000,
+      "maxDurationMs": 5000,
+      "maxHeapGrowthBytes": 100663296
+    },
+    "searchCatalog": {
+      "records": 50000,
+      "maxRecords": 50000,
+      "maxDurationMs": 5000,
+      "maxHeapGrowthBytes": 100663296,
+      "maxResults": 100
+    }
+  }
+}

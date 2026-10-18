@@ -29,6 +29,10 @@
  *                              retried once it goes stale (abandoned attempt)
  *   same key, other payload  → IdempotencyConflictError
  *   expired key              → IdempotencyKeyExpiredError
+ *
+ * Every branch also emits a telemetry event (see "Telemetry" below) so
+ * maintainers can see how often duplicate submissions and key collisions
+ * happen — the signature of a UI double-submit bug or a network retry storm.
  */
 
 export type IdempotencyStatus = 'in_progress' | 'succeeded' | 'failed';
@@ -55,17 +59,19 @@ export interface IdempotencyStore {
 
 export class IdempotencyError extends Error {
   readonly code: string;
-  constructor(code: string, message: string) {
+  readonly status: number;
+  constructor(code: string, message: string, status = 400) {
     super(message);
     this.name = 'IdempotencyError';
     this.code = code;
+    this.status = status;
   }
 }
 
 /** The key was already used for a different request. */
 export class IdempotencyConflictError extends IdempotencyError {
   constructor(message = 'This idempotency key was already used for a different request') {
-    super('IDEMPOTENCY_CONFLICT', message);
+    super('IDEMPOTENCY_CONFLICT', message, 409);
     this.name = 'IdempotencyConflictError';
   }
 }
@@ -73,7 +79,7 @@ export class IdempotencyConflictError extends IdempotencyError {
 /** The key's replay window has passed; a fresh key is required. */
 export class IdempotencyKeyExpiredError extends IdempotencyError {
   constructor(message = 'This idempotency key has expired; start the operation again with a new key') {
-    super('IDEMPOTENCY_KEY_EXPIRED', message);
+    super('IDEMPOTENCY_KEY_EXPIRED', message, 400);
     this.name = 'IdempotencyKeyExpiredError';
   }
 }
@@ -81,7 +87,7 @@ export class IdempotencyKeyExpiredError extends IdempotencyError {
 /** The same key is being processed right now. */
 export class IdempotencyInProgressError extends IdempotencyError {
   constructor(message = 'A request with this idempotency key is already in progress') {
-    super('IDEMPOTENCY_IN_PROGRESS', message);
+    super('IDEMPOTENCY_IN_PROGRESS', message, 409);
     this.name = 'IdempotencyInProgressError';
   }
 }
@@ -91,6 +97,7 @@ export const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 export const DEFAULT_STALE_IN_PROGRESS_MS = 30 * 1000;
 
 const STORAGE_PREFIX = 'trellis:idempotency:';
+const ATTEMPT_PREFIX = 'attempt:';
 
 export class MemoryIdempotencyStore implements IdempotencyStore {
   private readonly records = new Map<string, IdempotencyRecord>();
@@ -123,6 +130,42 @@ export class MemoryIdempotencyStore implements IdempotencyStore {
  */
 export class LocalStorageIdempotencyStore implements IdempotencyStore {
   private readonly fallback = new MemoryIdempotencyStore();
+  private evictionInterval: number | null = null;
+
+  constructor() {
+    this.startEvictionWorker();
+  }
+
+  private startEvictionWorker() {
+    if (typeof window === 'undefined') return;
+    this.evictionInterval = window.setInterval(() => this.evictStale(), 60000) as unknown as number;
+  }
+
+  private evictStale() {
+    const storage = this.storage;
+    if (!storage) return;
+    const now = Date.now();
+    const toRemove: string[] = [];
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i);
+      if (key?.startsWith(STORAGE_PREFIX) || key?.startsWith(ATTEMPT_PREFIX)) {
+        const raw = storage.getItem(key);
+        if (raw) {
+          try {
+            const record = JSON.parse(raw) as IdempotencyRecord;
+            if (record.expiresAt <= now) {
+              toRemove.push(key);
+            }
+          } catch {
+             toRemove.push(key);
+          }
+        }
+      }
+    }
+    for (const key of toRemove) {
+      storage.removeItem(key);
+    }
+  }
 
   private get storage(): Storage | null {
     try {
@@ -236,6 +279,179 @@ function fnv1a(input: string): string {
   return hash.toString(16).padStart(8, '0');
 }
 
+
+/* -------------------------------------------------------------------------- */
+/* Telemetry                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What happened to one `executeIdempotent` call:
+ *
+ *   miss       first attempt for the key — the operation ran
+ *   hit        duplicate submission absorbed (stored result or shared promise)
+ *   collision  key reuse the engine refused (other payload, or running elsewhere)
+ *   retry      the operation ran again after a failed or abandoned attempt
+ *   expired    the key's replay window had passed
+ */
+export type IdempotencyTelemetryKind = 'miss' | 'hit' | 'collision' | 'retry' | 'expired';
+
+export type IdempotencyTelemetryReason =
+  | 'first_attempt'
+  | 'replayed'
+  | 'in_flight'
+  | 'fingerprint_mismatch'
+  | 'in_progress'
+  | 'lock_contention'
+  | 'failed_retry'
+  | 'stale_retry'
+  | 'expired';
+
+export interface IdempotencyTelemetryEvent {
+  kind: IdempotencyTelemetryKind;
+  reason: IdempotencyTelemetryReason;
+  /** Operation scope (the key prefix), never the key or payload itself. */
+  scope: string;
+  /** Milliseconds since the epoch. */
+  ts: number;
+}
+
+export interface IdempotencyTelemetryCounters {
+  idempotency_requests: number;
+  idempotency_hits: number;
+  idempotency_collisions: number;
+  idempotency_retries: number;
+  idempotency_expired: number;
+}
+
+export type IdempotencyTelemetryListener = (event: IdempotencyTelemetryEvent) => void;
+
+const COUNTER_FOR_KIND: Record<Exclude<IdempotencyTelemetryKind, 'miss'>, keyof IdempotencyTelemetryCounters> = {
+  hit: 'idempotency_hits',
+  collision: 'idempotency_collisions',
+  retry: 'idempotency_retries',
+  expired: 'idempotency_expired',
+};
+
+function emptyCounters(): IdempotencyTelemetryCounters {
+  return {
+    idempotency_requests: 0,
+    idempotency_hits: 0,
+    idempotency_collisions: 0,
+    idempotency_retries: 0,
+    idempotency_expired: 0,
+  };
+}
+
+let telemetryCounters = emptyCounters();
+const telemetryListeners = new Set<IdempotencyTelemetryListener>();
+
+/** Keys look like `<scope>:<digest>`; only the low-cardinality scope is reported. */
+export function scopeFromIdempotencyKey(key: string): string {
+  const withoutAttempt = key.startsWith(ATTEMPT_PREFIX) ? key.slice(ATTEMPT_PREFIX.length) : key;
+  const separator = withoutAttempt.lastIndexOf(':');
+  return separator > 0 ? withoutAttempt.slice(0, separator) : 'unscoped';
+}
+
+function recordIdempotencyTelemetry(
+  kind: IdempotencyTelemetryKind,
+  reason: IdempotencyTelemetryReason,
+  key: string,
+  ts: number,
+): void {
+  telemetryCounters = { ...telemetryCounters, idempotency_requests: telemetryCounters.idempotency_requests + 1 };
+  if (kind !== 'miss') {
+    const counter = COUNTER_FOR_KIND[kind];
+    telemetryCounters[counter] += 1;
+  }
+  const event: IdempotencyTelemetryEvent = { kind, reason, scope: scopeFromIdempotencyKey(key), ts };
+  for (const listener of [...telemetryListeners]) {
+    try {
+      listener(event);
+    } catch {
+      // Telemetry must never break a write path.
+    }
+  }
+}
+
+/** Snapshot of the telemetry counters since load (or the last reset). */
+export function getIdempotencyTelemetry(): IdempotencyTelemetryCounters {
+  return { ...telemetryCounters };
+}
+
+/** Test/support helper: zero the counters. Listeners are kept. */
+export function resetIdempotencyTelemetry(): void {
+  telemetryCounters = emptyCounters();
+}
+
+/** Receives every telemetry event; returns an unsubscribe function. */
+export function subscribeIdempotencyTelemetry(listener: IdempotencyTelemetryListener): () => void {
+  telemetryListeners.add(listener);
+  return () => {
+    telemetryListeners.delete(listener);
+  };
+}
+
+/** Share of requests that were duplicates (hits) or refused key reuse (collisions). */
+export function duplicateRequestRate(counters: Pick<IdempotencyTelemetryCounters, 'idempotency_requests' | 'idempotency_hits' | 'idempotency_collisions'>): number {
+  if (counters.idempotency_requests === 0) return 0;
+  return (counters.idempotency_hits + counters.idempotency_collisions) / counters.idempotency_requests;
+}
+
+/** Above this duplicate rate the operations dashboard raises a warning. */
+export const DUPLICATE_RATE_WARNING_THRESHOLD = 0.2;
+
+export interface IdempotencyRateBucket {
+  start: number;
+  label: string;
+  requests: number;
+  hits: number;
+  collisions: number;
+  retries: number;
+  /** (hits + collisions) / requests, 0 when the bucket is empty. */
+  duplicateRate: number;
+}
+
+/**
+ * Buckets telemetry events over `[now - windowMs, now)` for charting hit and
+ * collision rates over time. Events outside the window are ignored.
+ */
+export function buildIdempotencyRateSeries(
+  events: readonly IdempotencyTelemetryEvent[],
+  options: { windowMs: number; bucketMs: number; now: number },
+): IdempotencyRateBucket[] {
+  const { windowMs, bucketMs, now } = options;
+  if (bucketMs <= 0 || windowMs <= 0) return [];
+  const bucketCount = Math.max(1, Math.ceil(windowMs / bucketMs));
+  const start = now - bucketCount * bucketMs;
+  const buckets: IdempotencyRateBucket[] = Array.from({ length: bucketCount }, (_, index) => {
+    const bucketStart = start + index * bucketMs;
+    const date = new Date(bucketStart);
+    return {
+      start: bucketStart,
+      label: `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`,
+      requests: 0,
+      hits: 0,
+      collisions: 0,
+      retries: 0,
+      duplicateRate: 0,
+    };
+  });
+
+  for (const event of events) {
+    if (event.ts < start || event.ts >= now) continue;
+    const bucket = buckets[Math.floor((event.ts - start) / bucketMs)];
+    bucket.requests += 1;
+    if (event.kind === 'hit') bucket.hits += 1;
+    if (event.kind === 'collision') bucket.collisions += 1;
+    if (event.kind === 'retry') bucket.retries += 1;
+  }
+
+  for (const bucket of buckets) {
+    bucket.duplicateRate = bucket.requests === 0 ? 0 : (bucket.hits + bucket.collisions) / bucket.requests;
+  }
+  return buckets;
+}
+
 export interface IdempotentRunOptions {
   key: string;
   fingerprint: string;
@@ -276,40 +492,53 @@ export async function executeIdempotent<T>(
   const existingInFlight = inFlight.get(key);
   if (existingInFlight) {
     // A second click while the first is still running shares its outcome.
+    recordIdempotencyTelemetry('hit', 'in_flight', key, now());
     return (await existingInFlight) as IdempotentRunResult<T>;
   }
 
-  const record = store.get(key);
+  const runLogic = async (): Promise<IdempotentRunResult<T>> => {
+    const record = store.get(key);
 
-  if (record) {
-    if (record.expiresAt <= now()) {
-      throw new IdempotencyKeyExpiredError();
+    if (record) {
+      if (record.expiresAt <= now()) {
+        recordIdempotencyTelemetry('expired', 'expired', key, now());
+        throw new IdempotencyKeyExpiredError();
+      }
+      if (record.fingerprint !== fingerprint) {
+        recordIdempotencyTelemetry('collision', 'fingerprint_mismatch', key, now());
+        throw new IdempotencyConflictError();
+      }
+      if (record.status === 'succeeded') {
+        recordIdempotencyTelemetry('hit', 'replayed', key, now());
+        return { value: record.result as T, replayed: true };
+      }
+      if (record.status === 'in_progress' && now() - record.updatedAt < staleInProgressMs) {
+        // Another tab started this and has not finished; we cannot see its
+        // promise, so refusing is the only way to avoid a second side effect.
+        recordIdempotencyTelemetry('collision', 'in_progress', key, now());
+        throw new IdempotencyInProgressError();
+      }
+      // `failed`, or an `in_progress` attempt that went stale: retry.
+      recordIdempotencyTelemetry(
+        'retry',
+        record.status === 'failed' ? 'failed_retry' : 'stale_retry',
+        key,
+        now(),
+      );
+    } else {
+      recordIdempotencyTelemetry('miss', 'first_attempt', key, now());
     }
-    if (record.fingerprint !== fingerprint) {
-      throw new IdempotencyConflictError();
-    }
-    if (record.status === 'succeeded') {
-      return { value: record.result as T, replayed: true };
-    }
-    if (record.status === 'in_progress' && now() - record.updatedAt < staleInProgressMs) {
-      // Another tab started this and has not finished; we cannot see its
-      // promise, so refusing is the only way to avoid a second side effect.
-      throw new IdempotencyInProgressError();
-    }
-    // `failed`, or an `in_progress` attempt that went stale: retry.
-  }
 
-  const startedAt = now();
-  const pending: IdempotencyRecord = {
-    key,
-    fingerprint,
-    status: 'in_progress',
-    createdAt: record?.createdAt ?? startedAt,
-    updatedAt: startedAt,
-    expiresAt: record && record.expiresAt > startedAt ? record.expiresAt : startedAt + ttlMs,
-  };
+    const startedAt = now();
+    const pending: IdempotencyRecord = {
+      key,
+      fingerprint,
+      status: 'in_progress',
+      createdAt: record?.createdAt ?? startedAt,
+      updatedAt: startedAt,
+      expiresAt: record && record.expiresAt > startedAt ? record.expiresAt : startedAt + ttlMs,
+    };
 
-  const run = (async (): Promise<IdempotentRunResult<T>> => {
     store.set(key, pending);
     try {
       const value = await operation();
@@ -329,8 +558,30 @@ export async function executeIdempotent<T>(
       });
       throw error;
     }
-  })();
+  };
 
+  const executeWithLock = async (): Promise<IdempotentRunResult<T>> => {
+    if (typeof navigator !== 'undefined' && navigator.locks) {
+      const lockName = `${STORAGE_PREFIX}${key}`;
+      let lockAcquired = false;
+      const result = await navigator.locks.request(lockName, { ifAvailable: true }, async (lock) => {
+        if (!lock) {
+          return null;
+        }
+        lockAcquired = true;
+        return runLogic();
+      });
+      
+      if (!lockAcquired) {
+        recordIdempotencyTelemetry('collision', 'lock_contention', key, now());
+        throw new IdempotencyInProgressError();
+      }
+      return result as IdempotentRunResult<T>;
+    }
+    return runLogic();
+  };
+
+  const run = executeWithLock();
   inFlight.set(key, run as Promise<IdempotentRunResult<unknown>>);
   try {
     return await run;
@@ -361,8 +612,6 @@ interface AttemptRecord {
   startedAt: number;
   expiresAt: number;
 }
-
-const ATTEMPT_PREFIX = 'attempt:';
 
 interface AttemptStorage {
   get(key: string): IdempotencyRecord | null;

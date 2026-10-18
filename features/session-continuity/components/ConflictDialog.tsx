@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { ConflictInfo, getRecoveryActions } from "../../../lib/concurrency";
 import { Button } from "../../../components/Button";
 
@@ -13,6 +14,25 @@ interface ConflictDialogProps {
  * Dialog for resolving concurrent edit conflicts
  */
 export function ConflictDialog({ conflict, onResolve, isOpen }: ConflictDialogProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen || !conflict) return;
+
+    const firstButton = dialogRef.current?.querySelector<HTMLButtonElement>("button");
+    firstButton?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onResolve("discard");
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, conflict, onResolve]);
+
   if (!isOpen || !conflict) {
     return null;
   }
@@ -34,9 +54,20 @@ export function ConflictDialog({ conflict, onResolve, isOpen }: ConflictDialogPr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-96 rounded-lg bg-white p-6 shadow-xl">
-        <h2 className="text-lg font-bold text-amber-900">Editing Conflict</h2>
-        <p className="mt-4 text-gray-700">{getMessage()}</p>
+      <div
+        ref={dialogRef}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="conflict-dialog-title"
+        aria-describedby="conflict-dialog-description"
+        className="w-96 rounded-lg bg-white p-6 shadow-xl"
+      >
+        <h2 id="conflict-dialog-title" className="text-lg font-bold text-amber-900">
+          Editing Conflict
+        </h2>
+        <p id="conflict-dialog-description" className="mt-4 text-gray-700">
+          {getMessage()}
+        </p>
 
         <div className="mt-6 space-y-3">
           {actions.map((action) => (

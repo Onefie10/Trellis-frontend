@@ -1,0 +1,249 @@
+{
+  "offline-queue-change": {
+    "1.0.0": {
+      "kind": "ZodObject",
+      "optional": false,
+      "hasDefault": false,
+      "nullable": false,
+      "fields": {
+        "pending": {
+          "kind": "ZodNumber",
+          "optional": false,
+          "hasDefault": false,
+          "nullable": false,
+          "constraints": "[{\"kind\":\"int\"},{\"kind\":\"min\",\"value\":0,\"inclusive\":true}]"
+        }
+      }
+    }
+  },
+  "offline-queue-synced": {
+    "1.0.0": {
+      "kind": "ZodObject",
+      "optional": false,
+      "hasDefault": false,
+      "nullable": false,
+      "fields": {
+        "dropped": {
+          "kind": "ZodArray",
+          "optional": false,
+          "hasDefault": false,
+          "nullable": false,
+          "items": {
+            "kind": "ZodString",
+            "optional": false,
+            "hasDefault": false,
+            "nullable": false
+          }
+        },
+        "remaining": {
+          "kind": "ZodNumber",
+          "optional": false,
+          "hasDefault": false,
+          "nullable": false,
+          "constraints": "[{\"kind\":\"int\"},{\"kind\":\"min\",\"value\":0,\"inclusive\":true}]"
+        },
+        "synced": {
+          "kind": "ZodArray",
+          "optional": false,
+          "hasDefault": false,
+          "nullable": false,
+          "items": {
+            "kind": "ZodString",
+            "optional": false,
+            "hasDefault": false,
+            "nullable": false
+          }
+        }
+      }
+    }
+  },
+  "sw-update": {
+    "1.0.0": {
+      "kind": "ZodObject",
+      "optional": false,
+      "hasDefault": false,
+      "nullable": false,
+      "fields": {
+        "available": {
+          "kind": "ZodLiteral",
+          "optional": false,
+          "hasDefault": false,
+          "nullable": false,
+          "literal": "true"
+        }
+      }
+    }
+  },
+  "pwa-install-available": {
+    "1.0.0": {
+      "kind": "ZodObject",
+      "optional": false,
+      "hasDefault": false,
+      "nullable": false,
+      "fields": {
+        "available": {
+          "kind": "ZodLiteral",
+          "optional": false,
+          "hasDefault": false,
+          "nullable": false,
+          "literal": "true"
+        }
+      }
+    }
+  },
+  "pwa-installed": {
+    "1.0.0": {
+      "kind": "ZodObject",
+      "optional": false,
+      "hasDefault": false,
+      "nullable": false,
+      "fields": {
+        "installed": {
+          "kind": "ZodLiteral",
+          "optional": false,
+          "hasDefault": false,
+          "nullable": false,
+          "literal": "true"
+        }
+      }
+    }
+  },
+  "connection-change": {
+    "1.0.0": {
+      "kind": "ZodObject",
+      "optional": false,
+      "hasDefault": false,
+      "nullable": false,
+      "fields": {
+        "online": {
+          "kind": "ZodBoolean",
+          "optional": false,
+          "hasDefault": false,
+          "nullable": false
+        }
+      }
+    }
+  },
+  "connection-quality-change": {
+    "1.0.0": {
+      "kind": "ZodObject",
+      "optional": false,
+      "hasDefault": false,
+      "nullable": false,
+      "fields": {
+        "downlink": {
+          "kind": "ZodNumber",
+          "optional": true,
+          "hasDefault": false,
+          "nullable": false,
+          "constraints": "[{\"kind\":\"min\",\"value\":0,\"inclusive\":true}]"
+        },
+        "effectiveType": {
+          "kind": "ZodString",
+          "optional": true,
+          "hasDefault": false,
+          "nullable": false,
+          "constraints": "[{\"kind\":\"min\",\"value\":1}]"
+        },
+        "online": {
+          "kind": "ZodBoolean",
+          "optional": false,
+          "hasDefault": false,
+          "nullable": false
+        },
+        "rtt": {
+          "kind": "ZodNumber",
+          "optional": true,
+          "hasDefault": false,
+          "nullable": false,
+          "constraints": "[{\"kind\":\"min\",\"value\":0,\"inclusive\":true}]"
+        },
+        "saveData": {
+          "kind": "ZodBoolean",
+          "optional": true,
+          "hasDefault": false,
+          "nullable": false
+        }
+      }
+    }
+  },
+  "WALLET_DISCONNECTED": {
+    "1.0.0": {
+      "kind": "ZodObject",
+      "optional": false,
+      "hasDefault": false,
+      "nullable": false,
+      "fields": {
+        "reason": {
+          "kind": "ZodString",
+          "optional": true,
+          "hasDefault": false,
+          "nullable": false,
+          "constraints": "[{\"kind\":\"min\",\"value\":1}]"
+        }
+      }
+    }
+  },
+  "NETWORK_CHANGED": {
+    "1.0.0": {
+      "kind": "ZodObject",
+      "optional": false,
+      "hasDefault": false,
+      "nullable": false,
+      "fields": {
+        "network": {
+          "kind": "ZodEnum",
+          "optional": false,
+          "hasDefault": false,
+          "nullable": false,
+          "values": [
+            "futurenet",
+            "public",
+            "sandbox",
+            "testnet"
+          ]
+        }
+      }
+    },
+    "2.0.0": {
+      "kind": "ZodObject",
+      "optional": false,
+      "hasDefault": false,
+      "nullable": false,
+      "fields": {
+        "network": {
+          "kind": "ZodEnum",
+          "optional": false,
+          "hasDefault": false,
+          "nullable": false,
+          "values": [
+            "futurenet",
+            "mainnet",
+            "testnet"
+          ]
+        }
+      }
+    }
+  },
+  "THEME_MUTATED": {
+    "1.0.0": {
+      "kind": "ZodObject",
+      "optional": false,
+      "hasDefault": false,
+      "nullable": false,
+      "fields": {
+        "mode": {
+          "kind": "ZodEnum",
+          "optional": false,
+          "hasDefault": false,
+          "nullable": false,
+          "values": [
+            "dark",
+            "light",
+            "system"
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,144 @@
+{
+  "issues": [
+    {
+      "number": 81,
+      "stage": 4,
+      "title": "Trellis Frontend: Implement resilient Soroban RPC node failover and rate-limit backoff",
+      "labels": ["blockchain", "stellar", "enhancement", "architecture"],
+      "body": "The Soroban client in `lib/soroban/client.ts` relies on a single configured Horizon/Soroban RPC endpoint. When the RPC node experiences rate limiting (HTTP 429), network latency, or downtime during peak network usage, wallet transactions and contract queries fail silently or throw unhandled exceptions.\n\n## Why this matters\nReliable node connection is essential for Stellar dApps. A single failing RPC endpoint breaks wallet interactions, proposal voting, and agent minting workflows for all active users.\n\n## Tasks\n- [ ] Implement a multi-endpoint RPC pool manager in `lib/soroban/client.ts` with primary and fallback node URLs\n- [ ] Add exponential backoff and jitter retry logic for HTTP 429 (Rate Limit) and 5xx responses\n- [ ] Implement active node health checks and automatic failover when node latency exceeds configurable thresholds\n- [ ] Expose RPC connection status (connected, degraded, offline) to the wallet context and header status indicator\n\n## Files to look at\n- `lib/soroban/client.ts`\n- `lib/stellar-constants.ts`\n- `features/wallet/`\n\n## Acceptance criteria\n- Contract calls automatically retry against fallback RPC endpoints upon node failure\n- UI gracefully displays degraded connection notice without crashing components"
+    },
+    {
+      "number": 82,
+      "stage": 4,
+      "title": "Trellis Frontend: Add offline-first capabilities and background sync for PWA service worker",
+      "labels": ["performance", "pwa", "enhancement", "frontend"],
+      "body": "While `public/sw.js` and `lib/pwa-utils.ts` configure basic PWA caching, offline support is incomplete. Users who lose internet connectivity while browsing marketplace agents or viewing governance proposals receive standard browser offline errors.\n\n## Why this matters\nMany humanitarian and global users operate in environments with intermittent connectivity. Offline reading and background queueing of draft actions significantly improve usability.\n\n## Tasks\n- [ ] Configure Workbox runtime caching strategies in `next.config.js` for marketplace listings and static assets\n- [ ] Implement Background Sync API via `lib/pwa-utils.ts` to queue pending form submissions (e.g., bug reports, feedback) when offline\n- [ ] Add an offline banner component informing users when using cached data\n- [ ] Write integration unit tests in `tests/pwa-utils.test.ts` for offline queue serialization\n\n## Files to look at\n- `lib/pwa-utils.ts`\n- `public/sw.js`\n- `next.config.js`\n\n## Acceptance criteria\n- Marketplace agents and documentation pages load from cache when offline\n- Queued offline submissions automatically sync when connectivity is restored"
+    },
+    {
+      "number": 83,
+      "stage": 4,
+      "title": "Trellis Frontend: Build IPFS metadata gateway fallback and cryptographic hash verification",
+      "labels": ["blockchain", "security", "enhancement", "ipfs"],
+      "body": "`lib/ipfs.ts` uploads agent metadata to IPFS via a single gateway. If the primary IPFS gateway is slow or unresponsive, agent avatars, descriptions, and code manifests fail to load across the marketplace.\n\n## Why this matters\nDecentralized metadata must be resilient against individual gateway downtime while guaranteeing content integrity against tampering.\n\n## Tasks\n- [ ] Add gateway fallback array (e.g., ipfs.io, dweb.link, cloudflare-ipfs) in `lib/ipfs.ts`\n- [ ] Implement SHA-256 / CID cryptographic hash validation after fetching IPFS content to prevent spoofed responses\n- [ ] Cache verified IPFS metadata in IndexedDB via `lib/cache-manager.ts`\n- [ ] Add unit tests verifying fallback progression when a gateway returns HTTP 504 or invalid content\n\n## Files to look at\n- `lib/ipfs.ts`\n- `lib/agentMetadataSchema.ts`\n- `lib/cache-manager.ts`\n\n## Acceptance criteria\n- Agent metadata loads seamlessly even if the primary gateway fails\n- Tampered IPFS payloads failing hash verification are rejected with security warnings"
+    },
+    {
+      "number": 84,
+      "stage": 4,
+      "title": "Trellis Frontend: Implement faceted search filtering and Algolia fallback for agent discovery",
+      "labels": ["frontend", "enhancement", "ui"],
+      "body": "The agent discovery component in `features/agent-discovery/` relies on Algolia search. When Algolia API credentials are not set or when Algolia service is degraded, search returns empty results without falling back to local client-side filtering.\n\n## Why this matters\nSearch is the core navigation path for users discovering AI agents. A failing search service severely degrades marketplace experience.\n\n## Tasks\n- [ ] Implement client-side fuzzy search fallback in `features/agent-discovery/` using Fuse.js or local regex indexing\n- [ ] Add multi-facet filter controls (Category, Price Range, Stellar Network, Rating, Verification status)\n- [ ] Preserve search query and selected filter facets in URL search params for bookmarking and sharing\n- [ ] Add unit tests for search state synchronization and fallback switching\n\n## Files to look at\n- `features/agent-discovery/`\n- `store/searchStore.ts`\n- `app/marketplace/page.tsx`\n\n## Acceptance criteria\n- Agent search works seamlessly via client-side index if Algolia API call fails\n- Faceted filters correctly filter results and synchronize state with URL query parameters"
+    },
+    {
+      "number": 85,
+      "stage": 4,
+      "title": "Trellis Frontend: Add auto-reconnection and exponential backoff for agent telemetry WebSockets",
+      "labels": ["telemetry", "bug", "enhancement", "realtime"],
+      "body": "The telemetry streaming connection in `features/agent-telemetry/` and `scripts/telemetry-ws-server.mjs` does not handle connection drops gracefully. If the WebSocket disconnects due to network instability, live metrics freeze without attempting reconnection.\n\n## Why this matters\nReal-time telemetry provides crucial monitoring during AI agent execution. Connection drops lead to missed status events and stale monitoring metrics.\n\n## Tasks\n- [ ] Add reconnection loop with exponential backoff and max retry attempts in `features/agent-telemetry/`\n- [ ] Implement WebSocket heartbeat ping/pong mechanism to detect broken connections promptly\n- [ ] Render visual status badge (Live, Reconnecting, Disconnected) on the agent telemetry dashboard\n- [ ] Add unit tests mocking socket disconnects and verifying reconnect timer progression\n\n## Files to look at\n- `features/agent-telemetry/`\n- `scripts/telemetry-ws-server.mjs`\n- `app/telemetry/page.tsx`\n\n## Acceptance criteria\n- Telemetry client automatically reconnects after network drops\n- Connection state indicators accurately update in real-time"
+    },
+    {
+      "number": 86,
+      "stage": 4,
+      "title": "Trellis Frontend: Build interactive agent simulation runner and step-level assertion engine",
+      "labels": ["testing", "enhancement", "developer-experience"],
+      "body": "`app/simulations/` and `lib/simulations.ts` contain prototype data for simulating agent workflows, but lack an interactive execution runner where developers can define step assertions and inspect intermediate state.\n\n## Why this matters\nDevelopers need to test agent prompt pipelines and tool executions before deploying them to mainnet.\n\n## Tasks\n- [ ] Build step-by-step interactive simulation player UI in `app/simulations/`\n- [ ] Add assertion engine allowing developers to define expected outputs for intermediate agent execution steps\n- [ ] Add JSON diff inspector for state mutations between execution steps\n- [ ] Add export/import functionality for simulation scenario files\n\n## Files to look at\n- `app/simulations/`\n- `lib/simulations.ts`\n- `features/agent-testing/`\n\n## Acceptance criteria\n- Developers can play, pause, and step through agent simulation runs\n- Failed assertions trigger highlighted diff warnings on specific execution steps"
+    },
+    {
+      "number": 87,
+      "stage": 4,
+      "title": "Trellis Frontend: Implement semantic versioning enforcement and visual diff viewer for agent versions",
+      "labels": ["enhancement", "developer-experience", "ui"],
+      "body": "`features/agent-versioning/` tracks agent releases but lacks validation for semantic version strings (`MAJOR.MINOR.PATCH`) and does not provide a visual diff tool for reviewing manifest changes between versions.\n\n## Why this matters\nImproper versioning causes compatibility issues for agent integrations. Visual diffing helps maintainers review code and prompt changes prior to release.\n\n## Tasks\n- [ ] Enforce SemVer rules using `semver` package when creating new agent release drafts\n- [ ] Build side-by-side visual diff component for agent metadata, prompt templates, and plugin manifests\n- [ ] Add rollback action allowing agent creators to restore previous stable versions\n- [ ] Add unit tests verifying SemVer string validation and version comparison logic\n\n## Files to look at\n- `features/agent-versioning/`\n- `app/create/page.tsx`\n\n## Acceptance criteria\n- Invalid version numbers (e.g. `v1`, `2.0`) are rejected with clear validation messages\n- Visual diff view accurately highlights additions, deletions, and modifications between versions"
+    },
+    {
+      "number": 88,
+      "stage": 4,
+      "title": "Trellis Frontend: Add governance proposal timelock execution and vote delegation workflow",
+      "labels": ["blockchain", "governance", "stellar", "enhancement"],
+      "body": "The DAO governance interface in `features/governance/` and `app/governance/` displays proposal voting but does not support timelock queueing/execution or token voting delegation.\n\n## Why this matters\non-chain DAO governance requires timelock delay periods between vote passing and execution to protect against flash loan attacks and allow user exit.\n\n## Tasks\n- [ ] Add proposal timelock status tracker (Pending, Queued, Executed, Expired) in `features/governance/`\n- [ ] Implement Soroban contract call trigger for executing passed proposals after timelock expiration\n- [ ] Build vote delegation UI allowing users to delegate voting power to trusted delegate addresses\n- [ ] Add unit tests for delegation state calculations and timelock eligibility rules\n\n## Files to look at\n- `features/governance/`\n- `app/governance/`\n- `lib/governance/`\n\n## Acceptance criteria\n- Users can delegate voting weight to target addresses via Soroban transaction\n- Queued proposals render real-time countdown timers until timelock execution is enabled"
+    },
+    {
+      "number": 89,
+      "stage": 4,
+      "title": "Trellis Frontend: Build plugin permission manifest validator and sandbox isolation controls",
+      "labels": ["security", "enhancement", "architecture"],
+      "body": "`features/plugins/` allows extending agent capabilities with third-party plugins, but lacks strict manifest schema validation and privilege isolation checks for declared plugin capabilities (e.g., network access, storage permissions).\n\n## Why this matters\nMalicious plugins could exfiltrate wallet keys or user data if plugin permissions are not strictly declared, audited, and isolated.\n\n## Tasks\n- [ ] Define JSON schema for plugin manifests specifying required scopes (`network:read`, `storage:local`, `wallet:sign`)\n- [ ] Build permission prompt modal requesting user authorization before activating high-privilege plugins\n- [ ] Implement iframe/web-worker isolation wrapper enforcing restricted execution contexts for untrusted plugin code\n- [ ] Add unit tests verifying manifest schema validation and permission denial paths\n\n## Files to look at\n- `features/plugins/`\n- `lib/security/`\n\n## Acceptance criteria\n- Plugins attempting to execute unauthorized capabilities are blocked by the isolation wrapper\n- Clear permission consent prompts are presented to users prior to plugin installation"
+    },
+    {
+      "number": 90,
+      "stage": 4,
+      "title": "Trellis Frontend: Implement Merkle proof verification for on-chain agent execution attestations",
+      "labels": ["blockchain", "security", "provenance", "enhancement"],
+      "body": "`features/provenance/` and `app/provenance/` showcase agent execution proofs, but proof verification is computed server-side without client-side cryptographic Merkle tree root validation.\n\n## Why this matters\nUsers and verifiers must be able to independently verify that execution logs match the cryptographic root committed to the Stellar ledger without trusting a centralized API.\n\n## Tasks\n- [ ] Implement client-side Merkle proof verification logic in `features/provenance/`\n- [ ] Build visual proof tree inspector showing leaf hashes, sibling hashes, and root validation state\n- [ ] Add Soroban state query to verify root hash matches on-chain commitment\n- [ ] Write unit tests for Merkle tree reconstruction and invalid proof detection\n\n## Files to look at\n- `features/provenance/`\n- `app/provenance/`\n- `lib/provenance/`\n\n## Acceptance criteria\n- Provenance page displays verified badge only after client-side Merkle proof validation succeeds\n- Invalid or corrupted proof chains display explicit cryptographic verification failure warnings"
+    },
+    {
+      "number": 91,
+      "stage": 4,
+      "title": "Trellis Frontend: Build personalized agent recommendation engine using vector similarity scoring",
+      "labels": ["enhancement", "ui", "analytics"],
+      "body": "`features/recommendations/` displays generic trending agents without personalizing suggestions based on user interaction history, category interest, or installed plugins.\n\n## Why this matters\nPersonalized recommendations help users quickly find relevant AI agents tailored to their operational workflows and domain needs.\n\n## Tasks\n- [ ] Implement lightweight client-side TF-IDF / vector similarity scoring utility in `features/recommendations/`\n- [ ] Build privacy-preserving local storage vector of user category views and agent interactions\n- [ ] Render 'Recommended for You' section on the agent discovery and dashboard pages\n- [ ] Add toggle in user settings to reset or disable recommendation tracking\n\n## Files to look at\n- `features/recommendations/`\n- `app/marketplace/page.tsx`\n- `lib/analytics.ts`\n\n## Acceptance criteria\n- Recommendation component renders relevant agent suggestions based on user activity\n- No private interaction data leaves the user's local browser storage"
+    },
+    {
+      "number": 92,
+      "stage": 4,
+      "title": "Trellis Frontend: Add dynamic Open Graph image generation and QR code export for referral links",
+      "labels": ["frontend", "enhancement", "developer-experience"],
+      "body": "`features/referral-sharing/` generates plain text referral URLs. Sharing links on social platforms (Twitter/X, Telegram, LinkedIn) produces generic preview cards without agent metadata or referral branding.\n\n## Why this matters\nRich social previews and QR code sharing significantly improve referral conversion rates for marketplace creators and affiliate partners.\n\n## Tasks\n- [ ] Add Dynamic OG image generation endpoint in `app/api/og/` using `@vercel/og` or `canvas`\n- [ ] Integrate client-side QR code generator in `features/referral-sharing/` with download as PNG/SVG\n- [ ] Build one-click share buttons for social networks with pre-filled campaign parameters\n- [ ] Add unit tests for referral URL parameter encoding and checksum generation\n\n## Files to look at\n- `features/referral-sharing/`\n- `store/referralStore.ts`\n- `app/api/`\n\n## Acceptance criteria\n- Shared referral links generate social preview cards featuring agent name, price, and affiliate code\n- Users can generate and download clean vector QR codes for offline sharing"
+    },
+    {
+      "number": 93,
+      "stage": 4,
+      "title": "Trellis Frontend: Implement automated vulnerability scan checks for creator submission queue",
+      "labels": ["security", "enhancement", "backend-integration"],
+      "body": "`features/submissions-dashboard/` and `app/submissions/` display agent creator submissions for review. Submissions currently rely on manual inspection without automated security scanning for hardcoded secrets or malicious URLs.\n\n## Why this matters\nAutomated static security scanning prevents malicious or unsafe agents from being listed on the public marketplace.\n\n## Tasks\n- [ ] Implement automated scanning pipeline in `features/submissions-dashboard/` checking for exposed API keys, dangerous eval calls, and malicious redirects\n- [ ] Render automated security score card (Passed, Warning, Critical) on submission review UI\n- [ ] Provide actionable remediation suggestions for creators when a scan flag is triggered\n- [ ] Add unit tests for security pattern rules and scanner false-positive handling\n\n## Files to look at\n- `features/submissions-dashboard/`\n- `app/submissions/`\n- `lib/security/content-sanitizer.ts`\n\n## Acceptance criteria\n- Submissions containing hardcoded credentials or dangerous patterns are automatically flagged\n- Reviewers see clear diagnostic output for flagged security violations"
+    },
+    {
+      "number": 94,
+      "stage": 4,
+      "title": "Trellis Frontend: Build epoch-based reward distribution calculator for Soroban trading bonuses",
+      "labels": ["blockchain", "stellar", "enhancement", "trading"],
+      "body": "`features/trading-bonuses/` displays static bonus estimations but does not compute real-time epoch distributions, pool share percentages, or reward decay curves.\n\n## Why this matters\nAccurate reward calculation allows liquidity providers and traders to project earned incentives prior to committing transactions.\n\n## Tasks\n- [ ] Build mathematical reward calculation utility in `features/trading-bonuses/` accounting for epoch volume, lock duration, and pool multipliers\n- [ ] Fetch live epoch parameters directly from Soroban reward contract storage\n- [ ] Add interactive yield calculator slider allowing users to estimate daily/weekly distributions\n- [ ] Add unit tests verifying edge-case calculations (zero volume, epoch transitions, max multipliers)\n\n## Files to look at\n- `features/trading-bonuses/`\n- `lib/trading/`\n- `lib/soroban/`\n\n## Acceptance criteria\n- Yield calculator accurately reflects contract reward formulas and epoch parameters\n- Contract state changes trigger instant recalculation of user reward estimates"
+    },
+    {
+      "number": 95,
+      "stage": 4,
+      "title": "Trellis Frontend: Add multi-wallet provider adapter supporting Freighter, Albedo, and xBull",
+      "labels": ["blockchain", "stellar", "enhancement", "wallet"],
+      "body": "`features/wallet/` supports basic Freighter wallet connections but lacks adapter abstraction for other popular Stellar ecosystem wallets such as Albedo, xBull, and Hana Wallet.\n\n## Why this matters\nSupporting multiple wallet providers increases accessibility for users across mobile browsers and different browser extensions.\n\n## Tasks\n- [ ] Create standardized `StellarWalletAdapter` interface in `features/wallet/` for connect, signTransaction, signMessage, and disconnect\n- [ ] Implement dedicated provider adapters for Freighter, Albedo, and xBull\n- [ ] Build modal selector UI for choosing preferred wallet provider during connection\n- [ ] Add unit tests mocking each wallet provider adapter's payload response\n\n## Files to look at\n- `features/wallet/`\n- `lib/wallet/`\n- `components/Navigation.tsx`\n\n## Acceptance criteria\n- Users can seamlessly connect, switch, and execute transactions using Freighter, Albedo, or xBull\n- Wallet selection is persisted across browser sessions"
+    },
+    {
+      "number": 96,
+      "stage": 4,
+      "title": "Trellis Frontend: Implement multi-tier cache eviction strategy with IndexedDB storage quotas",
+      "labels": ["performance", "enhancement", "architecture"],
+      "body": "`lib/cache-manager.ts` manages client-side caching but lacks Least Recently Used (LRU) eviction policy and StorageManager quota monitoring. Large cached responses can cause quota exceeded errors.\n\n## Why this matters\nUnbounded cache growth causes browser storage errors and performance degradation on mobile devices.\n\n## Tasks\n- [ ] Implement LRU cache eviction algorithm in `lib/cache-manager.ts` with configurable item count and size limits\n- [ ] Add `navigator.storage.estimate()` monitoring to check storage usage against browser quotas\n- [ ] Add automatic cache pruning when storage usage exceeds 80% quota threshold\n- [ ] Add unit tests for cache eviction progression and quota handling\n\n## Files to look at\n- `lib/cache-manager.ts`\n- `tests/`\n\n## Acceptance criteria\n- Cached items automatically purge under LRU policy when storage limits are approached\n- Storage quota errors are prevented through proactive cache pruning"
+    },
+    {
+      "number": 97,
+      "stage": 4,
+      "title": "Trellis Frontend: Add cursor-based pagination and filter persistence for developer bug reports",
+      "labels": ["frontend", "enhancement", "developer-experience"],
+      "body": "`lib/bug-reports-pagination.ts` and `app/bug-reports/` handle bug report pagination using simple offset pagination which causes missing or duplicate records when new reports are submitted in real-time.\n\n## Why this matters\nCursor-based pagination provides stable data navigation for rapidly updated lists such as issue queues and telemetry logs.\n\n## Tasks\n- [ ] Refactor `lib/bug-reports-pagination.ts` to use opaque base64 cursor tokens (`before`, `after`)\n- [ ] Add URL query param persistence for active filters (Status, Severity, Author, Tag)\n- [ ] Add optimistic update support when creating or updating report statuses\n- [ ] Add unit tests verifying cursor generation, parsing, and boundary navigation\n\n## Files to look at\n- `lib/bug-reports-pagination.ts`\n- `app/bug-reports/`\n- `app/bug-report/`\n\n## Acceptance criteria\n- Bug report list maintains continuous ordering without duplicate items when new reports arrive\n- Filter state is completely preserved when reloading or sharing report URLs"
+    },
+    {
+      "number": 98,
+      "stage": 4,
+      "title": "Trellis Frontend: Implement Web Push notification subscription and inbox sync in NotificationCenter",
+      "labels": ["frontend", "enhancement", "ux"],
+      "body": "`components/notifications/NotificationCenter.tsx` and `lib/notifications.ts` render in-app toast alerts, but do not support Web Push API subscriptions or persistent notification sync across browser tabs.\n\n## Why this matters\nWeb push notifications keep users informed of critical events (e.g., proposal passing, payout execution, agent error) even when the tab is inactive.\n\n## Tasks\n- [ ] Add Web Push API subscription manager in `lib/notifications.ts` handling VAPID keys and user permission prompts\n- [ ] Synchronize read/unread state across open tabs using BroadcastChannel API\n- [ ] Build notification preference settings panel for toggling push alerts per event category\n- [ ] Add unit tests for notification payload parsing and permission fallback\n\n## Files to look at\n- `components/notifications/NotificationCenter.tsx`\n- `lib/notifications.ts`\n- `app/settings/page.tsx`\n\n## Acceptance criteria\n- Users can subscribe to Web Push notifications and receive background system alerts\n- Marking a notification as read instantly updates across all open browser windows"
+    },
+    {
+      "number": 99,
+      "stage": 4,
+      "title": "Trellis Frontend: Build API key management and encrypted local config backup in user settings",
+      "labels": ["security", "enhancement", "ux"],
+      "body": "`app/settings/` provides user preferences but lacks secure client-side API key management (e.g., Algolia keys, Custom RPC endpoints) and encrypted configuration export/import.\n\n## Why this matters\nDevelopers and advanced users need to manage custom keys and transfer settings across devices securely without exposing sensitive strings in plain text.\n\n## Tasks\n- [ ] Build API key manager UI in `app/settings/` with password/passphrase masked inputs\n- [ ] Implement AES-GCM encrypted export/import file utility for local configuration backups\n- [ ] Store API keys in browser Web Crypto API secure storage\n- [ ] Add unit tests verifying encryption, decryption, and wrong-password rejection\n\n## Files to look at\n- `app/settings/`\n- `lib/security/`\n\n## Acceptance criteria\n- Exported setting files are encrypted with user passphrase using AES-GCM\n- API keys are masked by default and securely loaded for authorized network requests"
+    },
+    {
+      "number": 100,
+      "stage": 4,
+      "title": "Trellis Frontend: Implement Soroban staking pool yield calculator and unbonding period workflow",
+      "labels": ["blockchain", "stellar", "enhancement", "staking"],
+      "body": "`app/staking/` and `lib/staking/` contain static interfaces for agent token staking, but lack active unbonding queue tracking, APY yield calculation, and penalty estimation for early withdrawals.\n\n## Why this matters\nStakers need complete visibility into active bonding states, lock periods, and yield schedules to manage staked token assets effectively.\n\n## Tasks\n- [ ] Build real-time APY calculation model in `lib/staking/` based on total staked pool supply and block reward rates\n- [ ] Add unbonding queue timeline showing pending unlock dates and claimable token balances\n- [ ] Implement Soroban contract interaction for initiating unbond, claiming rewards, and emergency unstake\n- [ ] Add unit tests for APY math, unbonding penalty calculations, and claim eligibility checks\n\n## Files to look at\n- `app/staking/`\n- `lib/staking/`\n- `lib/soroban/`\n\n## Acceptance criteria\n- Staking page calculates dynamic APY yields based on current pool metrics\n- Unbonding requests initiate on-chain timers and display clear token availability dates"
+    }
+  ]
+}

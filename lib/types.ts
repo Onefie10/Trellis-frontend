@@ -40,13 +40,26 @@ export interface Tutorial {
 }
 
 // Stellar Wallet Types
-export type StellarNetwork = "mainnet" | "testnet" | "futurenet";
+/**
+ * The Stellar networks Trellis supports, as runtime values.
+ *
+ * This is the single source of truth. `StellarNetwork` below is derived from it
+ * so the type and any runtime schema built on the same list cannot drift apart -
+ * a drift that previously let `lib/domain-events` register a `network` payload
+ * using a vocabulary the rest of the app could never produce.
+ *
+ * The keys must stay in step with `STELLAR_NETWORKS` in `lib/stellar-constants.ts`.
+ */
+export const STELLAR_NETWORK_IDS = ["mainnet", "testnet", "futurenet"] as const;
+
+export type StellarNetwork = (typeof STELLAR_NETWORK_IDS)[number];
 
 export interface StellarNetworkConfig {
   name: StellarNetwork;
   displayName: string;
   horizonUrl: string;
   rpcUrl?: string;
+  rpcFallbackUrls?: string[];
   networkPassphrase: string;
   color: string;
   badge: string;
@@ -68,11 +81,23 @@ export interface StellarWallet {
   network: StellarNetwork;
 }
 
+export type RpcConnectionStatus = "connected" | "degraded" | "offline";
+
+export interface RpcConnectionStatusInfo {
+  status: RpcConnectionStatus;
+  activeNode: string | null;
+  fallbackNodes: number;
+  latencyMs: number;
+  warning?: string;
+  lastError?: string;
+}
+
 export interface WalletContextType {
   wallet: StellarWallet | null;
   network: StellarNetwork;
   isConnecting: boolean;
   error: string | null;
+  rpcStatus: RpcConnectionStatusInfo;
   connectWallet: (
     walletType: "freighter" | "albedo" | "ledger",
   ) => Promise<void>;
@@ -92,6 +117,8 @@ export interface WalletContextType {
 export interface TransactionResult {
   success: boolean;
   hash?: string;
+  /** Ledger sequence the transaction was included in, when known. */
+  ledger?: number;
   error?: string;
 }
 
@@ -108,6 +135,11 @@ export interface SorobanFunctionSpec {
   result: string;
 }
 
+export type SorobanScValType =
+  | "bool" | "string" | "symbol" | "bytes" | "address" | "void"
+  | "u32" | "i32" | "u64" | "i64" | "u128" | "i128" | "u256" | "i256"
+  | "timepoint" | "duration";
+
 export interface ResourceMetrics {
   cpuInstructions: number;
   ramBytes: number;
@@ -116,11 +148,13 @@ export interface ResourceMetrics {
   readCount: number;
   writeCount: number;
   costXlm: string;
+  minResourceFee?: string;
 }
 
 export interface SorobanTransactionResult extends TransactionResult {
   metrics?: ResourceMetrics;
   events?: SorobanEvent[];
+  isFeeBumped?: boolean;
 }
 
 export interface SorobanEvent {

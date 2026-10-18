@@ -65,6 +65,8 @@ const TableRow = React.memo<RowProps>(({ index, style, data }) => {
   
   return (
     <div 
+      role="row"
+      aria-rowindex={index + 2}
       style={{
         ...style,
         display: 'flex',
@@ -75,28 +77,28 @@ const TableRow = React.memo<RowProps>(({ index, style, data }) => {
         backgroundColor: index % 2 === 0 ? 'transparent' : 'rgba(79, 191, 155, 0.05)',
       }}
     >
-      <div style={{ flex: '0 0 140px', color: '#cbd5e1' }}>
+      <div role="cell" style={{ flex: '0 0 140px', color: '#cbd5e1' }}>
         {formatCell.timestamp(item.timestamp)}
       </div>
-      <div style={{ flex: '0 0 100px', textAlign: 'right', color: '#4FBF9B' }}>
+      <div role="cell" style={{ flex: '0 0 100px', textAlign: 'right', color: '#4FBF9B' }}>
         {formatCell.price(item.price)}
       </div>
-      <div style={{ flex: '0 0 80px', textAlign: 'right', color: '#F0B460' }}>
+      <div role="cell" style={{ flex: '0 0 80px', textAlign: 'right', color: '#F0B460' }}>
         {formatCell.volume(item.volume)}
       </div>
-      <div style={{ flex: '0 0 80px', textAlign: 'right', color: '#22c55e' }}>
+      <div role="cell" style={{ flex: '0 0 80px', textAlign: 'right', color: '#22c55e' }}>
         {formatCell.price(item.high)}
       </div>
-      <div style={{ flex: '0 0 80px', textAlign: 'right', color: '#ef4444' }}>
+      <div role="cell" style={{ flex: '0 0 80px', textAlign: 'right', color: '#ef4444' }}>
         {formatCell.price(item.low)}
       </div>
-      <div style={{ flex: '0 0 80px', textAlign: 'right', color: '#cbd5e1' }}>
+      <div role="cell" style={{ flex: '0 0 80px', textAlign: 'right', color: '#cbd5e1' }}>
         {formatCell.price(item.open)}
       </div>
-      <div style={{ flex: '0 0 80px', textAlign: 'right', color: '#cbd5e1' }}>
+      <div role="cell" style={{ flex: '0 0 80px', textAlign: 'right', color: '#cbd5e1' }}>
         {formatCell.price(item.close)}
       </div>
-      <div style={{ flex: '1', textAlign: 'right' }}>
+      <div role="cell" style={{ flex: '1', textAlign: 'right' }}>
         {formatCell.change(item.open, item.close)}
       </div>
     </div>
@@ -108,6 +110,8 @@ TableRow.displayName = 'TableRow';
 // Memoized header component
 const TableHeader = React.memo(() => (
   <div 
+    role="row"
+    aria-rowindex={1}
     style={{
       display: 'flex',
       borderBottom: '2px solid rgba(79, 191, 155, 0.3)',
@@ -121,14 +125,14 @@ const TableHeader = React.memo(() => (
       zIndex: 1,
     }}
   >
-    <div style={{ flex: '0 0 140px' }}>Time</div>
-    <div style={{ flex: '0 0 100px', textAlign: 'right' }}>Price</div>
-    <div style={{ flex: '0 0 80px', textAlign: 'right' }}>Volume</div>
-    <div style={{ flex: '0 0 80px', textAlign: 'right' }}>High</div>
-    <div style={{ flex: '0 0 80px', textAlign: 'right' }}>Low</div>
-    <div style={{ flex: '0 0 80px', textAlign: 'right' }}>Open</div>
-    <div style={{ flex: '0 0 80px', textAlign: 'right' }}>Close</div>
-    <div style={{ flex: '1', textAlign: 'right' }}>Change</div>
+    <div role="columnheader" style={{ flex: '0 0 140px' }}>Time</div>
+    <div role="columnheader" style={{ flex: '0 0 100px', textAlign: 'right' }}>Price</div>
+    <div role="columnheader" style={{ flex: '0 0 80px', textAlign: 'right' }}>Volume</div>
+    <div role="columnheader" style={{ flex: '0 0 80px', textAlign: 'right' }}>High</div>
+    <div role="columnheader" style={{ flex: '0 0 80px', textAlign: 'right' }}>Low</div>
+    <div role="columnheader" style={{ flex: '0 0 80px', textAlign: 'right' }}>Open</div>
+    <div role="columnheader" style={{ flex: '0 0 80px', textAlign: 'right' }}>Close</div>
+    <div role="columnheader" style={{ flex: '1', textAlign: 'right' }}>Change</div>
   </div>
 ));
 
@@ -160,6 +164,8 @@ const VirtualizedTradingTable: React.FC<VirtualizedTradingTableProps> = React.me
   if (!processedData || processedData.length === 0) {
     return (
       <div 
+        role="status"
+        aria-live="polite"
         style={{ 
           height, 
           display: 'flex', 
@@ -177,7 +183,12 @@ const VirtualizedTradingTable: React.FC<VirtualizedTradingTableProps> = React.me
   }
 
   return (
-    <div style={{ border: '1px solid rgba(79, 191, 155, 0.2)', borderRadius: '8px' }}>
+    <div
+      role="table"
+      aria-label="Trading activity"
+      aria-rowcount={processedData.length + 1}
+      style={{ border: '1px solid rgba(79, 191, 155, 0.2)', borderRadius: '8px' }}
+    >
       <TableHeader />
       <List
         height={height - 40} // Account for header height

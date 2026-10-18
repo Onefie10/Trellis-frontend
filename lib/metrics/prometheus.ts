@@ -1,6 +1,10 @@
 import type { MetricsPanelDefinition, MetricsPanelResponse, MetricsSeries } from './types';
 import { labelsToSeriesName, sanitizeLabels } from './sanitize';
 
+/** Bound browser work and response size even when a collector returns abusive cardinality. */
+export const MAX_METRIC_SERIES = 200;
+export const MAX_POINTS_PER_SERIES = 1_000;
+
 type PromMatrixValue = [number | string, string];
 
 interface PromQueryRangeResponse {
@@ -74,12 +78,14 @@ export async function queryRangePanel(args: {
     throw new Error(json.error || 'Prometheus error');
   }
 
-  const series: MetricsSeries[] = json.data.result.map((r) => {
+  const series: MetricsSeries[] = json.data.result.slice(0, MAX_METRIC_SERIES).map((r) => {
     const labels = sanitizeLabels(r.metric || {});
     return {
       labels,
       seriesName: labelsToSeriesName(labels),
-      points: (r.values || []).map(([ts, v]) => ({
+      // Keep the newest points so the displayed range remains current when a
+      // collector ignores the requested step or returns an unexpectedly large result.
+      points: (r.values || []).slice(-MAX_POINTS_PER_SERIES).map(([ts, v]) => ({
         ts: toUnixSeconds(ts),
         value: parseFloatSafe(v),
       })),

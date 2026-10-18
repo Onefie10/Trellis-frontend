@@ -1,0 +1,144 @@
+{
+  "issues": [
+    {
+      "number": 101,
+      "stage": 5,
+      "title": "Trellis Frontend: Implement Soroban XDR event topic decoder and missed-event catch-up worker",
+      "labels": ["blockchain", "stellar", "enhancement", "realtime"],
+      "body": "`lib/soroban/events.ts` listens for on-chain contract events but lacks XDR topic decoding for complex Soroban event structures and does not handle historical event catch-up after web socket reconnects.\n\n## Why this matters\nDecoded contract events provide vital real-time status during minting, staking, and governance actions. Missed events during network disconnects lead to out-of-sync UI state.\n\n## Tasks\n- [ ] Implement XDR topic decoder in `lib/soroban/events.ts` supporting Soroban ScVal types\n- [ ] Add historical event query worker fetching missed events from Soroban RPC `getEvents` endpoint upon reconnection\n- [ ] Store processed event sequence numbers in local storage to prevent duplicate event processing\n- [ ] Write unit tests for XDR decoding of contract invocation events\n\n## Files to look at\n- `lib/soroban/events.ts`\n- `lib/soroban/client.ts`\n- `features/soroban/`\n\n## Acceptance criteria\n- Contract events are automatically decoded into typed JS objects\n- Reconnecting clients query missed event windows seamlessly"
+    },
+    {
+      "number": 102,
+      "stage": 5,
+      "title": "Trellis Frontend: Add canonical JSON normalization and cryptographic signature payload encoder",
+      "labels": ["security", "blockchain", "enhancement", "architecture"],
+      "body": "`lib/canonicalization.ts` formats payload strings for signing, but does not enforce deterministic key sorting or whitespace normalization across nested JSON structures.\n\n## Why this matters\nNon-canonical JSON serialization results in signature verification failures across different client architectures and browser runtimes.\n\n## Tasks\n- [ ] Implement RFC 8785 JSON Canonicalization Scheme (JCS) encoder in `lib/canonicalization.ts`\n- [ ] Normalize unicode characters, array key ordering, and floating point numbers prior to hashing\n- [ ] Add helper function for producing deterministic payload hashes for wallet signing\n- [ ] Add unit tests verifying JCS test vectors and cross-platform hash consistency\n\n## Files to look at\n- `lib/canonicalization.ts`\n- `tests/lib/canonicalization.test.ts`\n\n## Acceptance criteria\n- Identical data structures produce byte-identical canonical JSON representations\n- Signature payload hashes match official RFC 8785 reference test vectors"
+    },
+    {
+      "number": 103,
+      "stage": 5,
+      "title": "Trellis Frontend: Build schema versioning migration pipeline and deprecated field warnings",
+      "labels": ["enhancement", "architecture", "developer-experience"],
+      "body": "`lib/schema-versioning.ts` handles record versions but lacks step-by-step transform functions (`v1` -> `v2` -> `v3`) and developer warnings for deprecated schema fields.\n\n## Why this matters\nAs agent metadata and API record schemas evolve, backwards compatibility requires automated migrations for legacy saved data.\n\n## Tasks\n- [ ] Define modular migration step registry in `lib/schema-versioning.ts`\n- [ ] Add automatic sequential schema upgrader for loaded IndexedDB and LocalStorage records\n- [ ] Console warn with deprecation notices when code accesses legacy schema properties\n- [ ] Add unit tests verifying multi-version data upgrades (`v1` to `v3` direct and step-wise)\n\n## Files to look at\n- `lib/schema-versioning.ts`\n- `tests/lib/schema-versioning.test.ts`\n\n## Acceptance criteria\n- Legacy data records are automatically migrated to current schema versions on read\n- Accessing deprecated fields outputs informative developer console guidance"
+    },
+    {
+      "number": 104,
+      "stage": 5,
+      "title": "Trellis Frontend: Implement distributed lock manager and idempotency key TTL expiration",
+      "labels": ["performance", "enhancement", "backend-integration"],
+      "body": "`lib/idempotency.ts` prevents duplicate submission requests but lacks automatic TTL cleanup for stale idempotency keys and mutex locks for concurrent tab executions.\n\n## Why this matters\nStale idempotency keys pollute browser storage, while uncoordinated concurrent requests from multiple tabs can trigger duplicate financial transactions.\n\n## Tasks\n- [ ] Implement Web Locks API (`navigator.locks`) integration in `lib/idempotency.ts` to synchronize cross-tab executions\n- [ ] Add automatic TTL eviction worker purging expired idempotency keys\n- [ ] Return standard `409 Conflict` status responses when a concurrent duplicate request is detected\n- [ ] Add unit tests simulating cross-tab lock contention\n\n## Files to look at\n- `lib/idempotency.ts`\n- `lib/tests/idempotency.test.ts`\n\n## Acceptance criteria\n- Concurrent write operations across multiple tabs are safely queued via locks\n- Idempotency storage automatically frees space via TTL expiration"
+    },
+    {
+      "number": 105,
+      "stage": 5,
+      "title": "Trellis Frontend: Add automated operational health score calculator and status page endpoint",
+      "labels": ["enhancement", "ci", "telemetry"],
+      "body": "`lib/operational-health.ts` and `app/api/operational-health/route.ts` report basic health status but lack scoring algorithms for API latency, RPC availability, and error rate metrics.\n\n## Why this matters\nA unified health score provides maintainers and status monitors with an instant snapshot of application operational degradation.\n\n## Tasks\n- [ ] Build weighted health score calculator (0-100%) in `lib/operational-health.ts`\n- [ ] Add sub-system probes for Stellar RPC latency, IPFS gateway status, and WebSocket availability\n- [ ] Format `/api/operational-health` response compatible with standard status page services (e.g. Statuspage, Better Stack)\n- [ ] Add unit tests verifying health score degradation during simulated RPC latency spikes\n\n## Files to look at\n- `lib/operational-health.ts`\n- `app/api/operational-health/route.ts`\n- `tests/__tests__/operational-health.test.ts`\n\n## Acceptance criteria\n- Health endpoint returns JSON containing component breakdown and overall health score\n- Component failures accurately decrease overall operational health percentage"
+    },
+    {
+      "number": 106,
+      "stage": 5,
+      "title": "Trellis Frontend: Implement BroadcastChannel multi-tab session sync and conflict resolution",
+      "labels": ["frontend", "ux", "enhancement"],
+      "body": "`features/session-continuity/` provides basic session tracking but does not broadcast state changes (e.g., wallet disconnect, active theme, active agent) across browser tabs in real time.\n\n## Why this matters\nWhen a user logs out or switches wallets in one tab, open tabs can become desynchronized and perform actions under stale credentials.\n\n## Tasks\n- [ ] Implement `BroadcastChannel` synchronization layer in `features/session-continuity/`\n- [ ] Add event handlers for `WALLET_DISCONNECTED`, `NETWORK_CHANGED`, and `THEME_MUTATED`\n- [ ] Render modal dialog when state conflict occurs requiring user confirmation\n- [ ] Add unit tests mocking BroadcastChannel messages and verifying tab state alignment\n\n## Files to look at\n- `features/session-continuity/`\n- `components/providers/ThemeModeProvider.tsx`\n- `features/wallet/`\n\n## Acceptance criteria\n- Disconnecting wallet in Tab A instantly updates UI state in Tab B\n- Conflicting tab actions trigger clear resolution prompts"
+    },
+    {
+      "number": 107,
+      "stage": 5,
+      "title": "Trellis Frontend: Build activity timeline PII redaction filter and CSV/JSON exporter",
+      "labels": ["frontend", "security", "privacy", "enhancement"],
+      "body": "`features/activity-timeline/` displays user event logs, but does not sanitize sensitive data fields (e.g. IP addresses, private keys, auth headers) before display or export.\n\n## Why this matters\nExporting or viewing unredacted timeline logs risks accidental exposure of sensitive user or network tokens.\n\n## Tasks\n- [ ] Add pattern-matching PII sanitizer in `features/activity-timeline/` redacting secret tokens, JWTs, and IP addresses\n- [ ] Build log exporter allowing users to download sanitized activity logs in CSV and JSON formats\n- [ ] Add search and filter controls by date range and event severity\n- [ ] Add unit tests verifying PII scrubbing on sample log payloads\n\n## Files to look at\n- `features/activity-timeline/`\n- `app/dashboard/`\n\n## Acceptance criteria\n- Sensitive key patterns and IP strings are replaced with `[REDACTED]` badges in UI and exports\n- Exported CSV/JSON files contain valid, sanitized event timelines"
+    },
+    {
+      "number": 108,
+      "stage": 5,
+      "title": "Trellis Frontend: Implement differential privacy noise injection for maintainer analytics",
+      "labels": ["analytics", "privacy", "security", "enhancement"],
+      "body": "`features/analytics/` and `lib/analytics.ts` collect aggregate usage metrics but lack privacy-preserving noise mechanisms to prevent individual user tracking from aggregated statistics.\n\n## Why this matters\nApplying differential privacy guarantees that aggregate telemetry cannot be reverse-engineered to identify specific user habits.\n\n## Tasks\n- [ ] Implement Laplace / Randomized Response noise algorithm in `features/analytics/`\n- [ ] Apply privacy budget (`epsilon`) parameter controls to client-side metric reporting\n- [ ] Add privacy audit log displaying active privacy protection settings\n- [ ] Add unit tests verifying mathematical distribution of noise injection\n\n## Files to look at\n- `features/analytics/`\n- `lib/analytics.ts`\n- `features/analytics/__tests__/privacy.test.ts`\n\n## Acceptance criteria\n- Aggregate metric reports include mathematically bounded differential noise\n- No raw individual activity traces are transmitted without privacy transformation"
+    },
+    {
+      "number": 109,
+      "stage": 5,
+      "title": "Trellis Frontend: Build mock wallet balance generator and transaction replay in integration sandbox",
+      "labels": ["testing", "blockchain", "sandbox", "developer-experience"],
+      "body": "`features/sandbox/` provides isolated testing components but lacks tools for generating custom mock wallet balances or replaying recorded testnet transactions.\n\n## Why this matters\nDevelopers need to test frontend UI behaviors under various wallet states (e.g., low XLM balance, missing trustlines, contract errors) without spending testnet tokens.\n\n## Tasks\n- [ ] Add mock wallet balance generator UI in `features/sandbox/` supporting custom asset codes and balances\n- [ ] Implement transaction scenario recorder allowing devs to record and replay transaction responses\n- [ ] Add scenario preset selector for common edge cases (Out of Energy, Invalid Sequence, Tx Expired)\n- [ ] Write unit tests for sandbox transaction replay adapter\n\n## Files to look at\n- `features/sandbox/`\n- `lib/sandbox.ts`\n- `lib/sandbox-fixtures.ts`\n\n## Acceptance criteria\n- Developers can inject mock wallet states into frontend components during sandbox testing\n- Transaction replay engine accurately mocks on-chain success and failure scenarios"
+    },
+    {
+      "number": 110,
+      "stage": 5,
+      "title": "Trellis Frontend: Add strict Content Security Policy (CSP) headers and DOMPurify sanitizer rules",
+      "labels": ["security", "frontend", "enhancement"],
+      "body": "`components/security/` sanitizes input but Next.js configuration lacks strict Content Security Policy (CSP) HTTP headers restricting script sources, object embeds, and style injection.\n\n## Why this matters\nA robust CSP header mitigates Cross-Site Scripting (XSS) and data injection vulnerabilities across all application routes.\n\n## Tasks\n- [ ] Configure strict CSP headers in `next.config.js` (`script-src`, `style-src`, `connect-src`, `frame-ancestors`)\n- [ ] Integrate DOMPurify in `components/security/SafeContent.tsx` for sanitizing rich user descriptions\n- [ ] Add nonce generation for inline scripts required by Next.js and MUI Emotion\n- [ ] Add unit tests for XSS payload stripping in `tests/__tests__/content-sanitizer.test.ts`\n\n## Files to look at\n- `next.config.js`\n- `components/security/SafeContent.tsx`\n- `lib/security/content-sanitizer.ts`\n\n## Acceptance criteria\n- CSP headers pass security scanning checks without unsafe-inline script permissions\n- Malicious script tags in user content are stripped prior to rendering"
+    },
+    {
+      "number": 111,
+      "stage": 5,
+      "title": "Trellis Frontend: Add sound alert notifications, quiet hours scheduling, and category muting",
+      "labels": ["frontend", "ux", "enhancement"],
+      "body": "`components/notifications/NotificationCenter.tsx` displays visual alerts but lacks customizable audio chimes, quiet hours schedules, or granular notification category mutes.\n\n## Why this matters\nUser experience improves when users can customize notification alerts according to their working hours and focus needs.\n\n## Tasks\n- [ ] Add Web Audio API chime sounds for success, warning, and critical events in `NotificationCenter.tsx`\n- [ ] Build quiet hours scheduler UI allowing users to mute non-critical alerts during specific time windows\n- [ ] Add category mute toggles (Trading, Governance, Security, System Alerts) in notification settings\n- [ ] Add unit tests for quiet hours scheduling logic\n\n## Files to look at\n- `components/notifications/NotificationCenter.tsx`\n- `lib/notifications.ts`\n- `app/settings/page.tsx`\n\n## Acceptance criteria\n- Audio chimes trigger for critical notifications when audio alerts are enabled\n- Notifications occurring within scheduled quiet hours are silenced automatically"
+    },
+    {
+      "number": 112,
+      "stage": 5,
+      "title": "Trellis Frontend: Build maintainer exception trend visualizer and real-time alert trigger rules",
+      "labels": ["telemetry", "enhancement", "dashboard"],
+      "body": "`app/dashboard/operations/page.tsx` displays basic logs but lacks visual trend charts for application exceptions and configurable error threshold alert rules.\n\n## Why this matters\nVisual exception trends help maintainers spot error spikes and performance degradations before they impact broad user groups.\n\n## Tasks\n- [ ] Add Recharts time-series graph in `app/dashboard/operations/page.tsx` charting error rates over time\n- [ ] Build alert rule creator allowing maintainers to set thresholds (e.g. >15 RPC errors in 5 mins)\n- [ ] Add filter controls for grouping exceptions by component, browser OS, and release version\n- [ ] Add unit tests for error aggregation calculations\n\n## Files to look at\n- `app/dashboard/operations/page.tsx`\n- `lib/operational-health.ts`\n- `store/apiMetricsStore.ts`\n\n## Acceptance criteria\n- Exception dashboard renders dynamic error frequency charts\n- Breach of maintainer alert thresholds highlights visual warning banners"
+    },
+    {
+      "number": 113,
+      "stage": 5,
+      "title": "Trellis Frontend: Implement Server-Sent Events (SSE) progress streaming for batch CSV import",
+      "labels": ["backend-integration", "frontend", "enhancement"],
+      "body": "`app/api/import/route.ts` and `lib/import/pipeline.ts` process bulk agent imports in a single request, which can timeout on large CSV files.\n\n## Why this matters\nStreaming import progress provides real-time feedback during large data ingestions and prevents HTTP request timeout errors.\n\n## Tasks\n- [ ] Convert batch import endpoint `app/api/import/route.ts` to support Server-Sent Events (`text/event-stream`)\n- [ ] Stream progress updates (`processed`, `total`, `current_item`, `errors`) to client UI\n- [ ] Add cancel button in import modal sending abort signal to terminate ongoing import jobs\n- [ ] Add integration tests in `tests/__tests__/import-pipeline.test.ts` for SSE stream parsing\n\n## Files to look at\n- `app/api/import/route.ts`\n- `lib/import/pipeline.ts`\n- `docs/import-pipeline.md`\n\n## Acceptance criteria\n- Large CSV imports stream real-time progress percentages to the UI modal\n- Canceling an import aborts processing gracefully without corrupting database state"
+    },
+    {
+      "number": 114,
+      "stage": 5,
+      "title": "Trellis Frontend: Add visual regression testing and automated axe-core a11y checks in Playwright",
+      "labels": ["test", "ci", "accessibility"],
+      "body": "`e2e/smoke.spec.ts` tests basic navigation, but does not include visual pixel-diff snapshot comparisons or automated accessibility audit checks.\n\n## Why this matters\nAutomated visual and accessibility checks prevent UI layout breakages and ensure compliance with WCAG 2.1 standards across all releases.\n\n## Tasks\n- [ ] Add Playwright visual snapshot assertions (`toHaveScreenshot()`) for primary marketplace pages\n- [ ] Integrate `@axe-core/playwright` in `e2e/journey.spec.ts` running accessibility audits on key workflow screens\n- [ ] Configure threshold tolerance for minor browser rendering diffs in `playwright.config.ts`\n- [ ] Wire visual and a11y checks into `.github/workflows/e2e.yml`\n\n## Files to look at\n- `e2e/smoke.spec.ts`\n- `e2e/journey.spec.ts`\n- `playwright.config.ts`\n\n## Acceptance criteria\n- E2E test suite automatically flags visual layout regressions against baseline screenshots\n- Accessibility violations (e.g. low contrast, missing ARIA labels) fail the Playwright CI run"
+    },
+    {
+      "number": 115,
+      "stage": 5,
+      "title": "Trellis Frontend: Enhance developer diagnostics script with port conflict and environment audits",
+      "labels": ["developer-experience", "enhancement", "testing"],
+      "body": "`scripts/diagnostics.mjs` verifies Node and npm versions but lacks checks for required environment variables (`.env.example` vs `.env.local`) and listening port conflicts.\n\n## Why this matters\nA comprehensive health check script helps new contributors diagnose environment setup errors in a single step.\n\n## Tasks\n- [ ] Add `.env.local` validation check in `scripts/diagnostics.mjs` comparing keys against `.env.example`\n- [ ] Check availability of local dev ports (3000, 8080) and output process details if occupied\n- [ ] Check system memory and disk space requirements for building Next.js\n- [ ] Add unit test suite for diagnostics output formatting in `tests/__tests__/diagnostics.test.ts`\n\n## Files to look at\n- `scripts/diagnostics.mjs`\n- `tests/__tests__/diagnostics.test.ts`\n- `.env.example`\n\n## Acceptance criteria\n- Running `npm run diagnostics` provides detailed feedback on missing environment variables and occupied ports\n- Diagnoser returns exit code 0 when all local environment checks pass"
+    },
+    {
+      "number": 116,
+      "stage": 5,
+      "title": "Trellis Frontend: Auto-generate OpenAPI 3.0 specs and interactive Redoc API docs from App Router",
+      "labels": ["documentation", "developer-experience", "enhancement"],
+      "body": "`docs/api-contracts.md` documents API endpoints in prose, which drifts from actual Next.js App Router route handlers.\n\n## Why this matters\nAuto-generated OpenAPI specifications ensure documentation stays synchronized with backend API changes and enables client SDK generation.\n\n## Tasks\n- [ ] Add TypeScript Zod / OpenAPI generator inspecting `app/api/` route handlers\n- [ ] Generate `public/openapi.json` standard specification file during `npm run build`\n- [ ] Mount interactive Redoc / Swagger UI page at `/docs/api` for API exploration\n- [ ] Add automated drift test in `tests/__tests__/api-contracts-drift.test.ts` verifying spec matches routes\n\n## Files to look at\n- `docs/api-contracts.md`\n- `lib/api-contracts/schemas.ts`\n- `tests/__tests__/api-contracts-drift.test.ts`\n\n## Acceptance criteria\n- Building the project automatically updates the OpenAPI 3.0 specification file\n- Interactive API documentation page renders at `/docs/api`"
+    },
+    {
+      "number": 117,
+      "stage": 5,
+      "title": "Trellis Frontend: Build automated duplicate detection and build version filter for bug reports",
+      "labels": ["frontend", "enhancement", "developer-experience"],
+      "body": "`app/bug-reports/` lists developer issue reports, but lacks duplicate report detection and filtering by application build version.\n\n## Why this matters\nDuplicate reports clutter the maintenance queue. Grouping reports by build version helps maintainers identify regressions caused by specific releases.\n\n## Tasks\n- [ ] Implement text similarity algorithm (Jaccard / Levenshtein) in `lib/bug-reports-pagination.ts` suggesting existing similar reports during submission\n- [ ] Add build version badge and filter dropdown to the bug reports list UI\n- [ ] Render regression alert when multiple reports are filed against the latest build release\n- [ ] Add unit tests for duplicate detection scoring\n\n## Files to look at\n- `app/bug-reports/`\n- `app/bug-report/`\n- `lib/bug-reports-pagination.ts`\n\n## Acceptance criteria\n- Submitting a new bug report displays warning if similar existing reports are found\n- Maintainers can filter reports by specific app version tags"
+    },
+    {
+      "number": 118,
+      "stage": 5,
+      "title": "Trellis Frontend: Implement percentage-based canary rollouts and remote feature flag polling",
+      "labels": ["architecture", "enhancement", "feature-flags"],
+      "body": "`lib/feature-flags.ts` supports basic boolean flags, but lacks percentage-based user targeting (canary releases) and remote flag configuration polling.\n\n## Why this matters\nCanary rollouts allow maintainers to safely test new features with 5% or 10% of users before full production release.\n\n## Tasks\n- [ ] Implement deterministic user hashing (MurmurHash / MD5 of user ID) for percentage rollout evaluation in `lib/feature-flags.ts`\n- [ ] Add background polling worker updating feature flag configurations periodically\n- [ ] Add maintainer override controls in local storage for developer testing\n- [ ] Add unit tests in `tests/__tests__/feature-flags.test.ts` verifying percentage distribution accuracy\n\n## Files to look at\n- `lib/feature-flags.ts`\n- `tests/__tests__/feature-flags.test.ts`\n- `docs/operational-rollout.md`\n\n## Acceptance criteria\n- Percentage rollouts consistently assign the same users to canary groups\n- Remote flag updates apply dynamically without requiring page refreshes"
+    },
+    {
+      "number": 119,
+      "stage": 5,
+      "title": "Trellis Frontend: Add OpenTelemetry exporter integration for client counter and gauge metrics",
+      "labels": ["telemetry", "enhancement", "architecture"],
+      "body": "`lib/metric-definitions.ts` defines system metrics, but metrics are only stored locally without exporting to OpenTelemetry collector endpoints.\n\n## Why this matters\nExporting standardized metrics to OpenTelemetry monitoring platforms (Prometheus, Grafana, Datadog) gives maintainers deep operational visibility.\n\n## Tasks\n- [ ] Integrate `@opentelemetry/api` exporter in `lib/metric-definitions.ts`\n- [ ] Configure periodic batch exporter transmitting client counters, histograms, and gauges\n- [ ] Add environment configuration for custom OTLP collector HTTP/gRPC endpoints\n- [ ] Add unit tests verifying metric batch aggregation and transmission formatting\n\n## Files to look at\n- `lib/metric-definitions.ts`\n- `app/api/`\n- `docs/telemetry-event-contract.md`\n\n## Acceptance criteria\n- Client telemetry metrics are formatted according to OpenTelemetry standards\n- OTLP exporter transmits metric batches cleanly to configured collector URLs"
+    },
+    {
+      "number": 120,
+      "stage": 5,
+      "title": "Trellis Frontend: Implement Zustand state persistence middleware and hydration mismatch protection",
+      "labels": ["frontend", "architecture", "refactor"],
+      "body": "`store/searchStore.ts`, `store/referralStore.ts`, and `store/apiMetricsStore.ts` manage state with Zustand, but lack standardized `persist` middleware configuration and client hydration safety.\n\n## Why this matters\nWithout proper hydration handling, loading persisted store state from local storage causes Next.js React hydration mismatch errors on page load.\n\n## Tasks\n- [ ] Configure `zustand/middleware` `persist` with custom storage serialisers across all stores\n- [ ] Add `useHasHydrated` hook preventing SSR/CSR HTML mismatches when reading persisted store state\n- [ ] Add store migration functions for handling state schema updates\n- [ ] Add unit tests for store serialization and rehydration in `store/`\n\n## Files to look at\n- `store/searchStore.ts`\n- `store/referralStore.ts`\n- `store/apiMetricsStore.ts`\n- `store/README.md`\n\n## Acceptance criteria\n- Zustand stores persist selected state across page reloads seamlessly\n- Next.js pages load without React hydration mismatch warnings in the developer console"
+    }
+  ]
+}

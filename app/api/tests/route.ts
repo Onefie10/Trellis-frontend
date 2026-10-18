@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db/mock-db";
 import { SorobanTestingEngine } from "@/lib/soroban/testing";
+import { csrfMiddleware } from "@/lib/security/csrf";
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,6 +13,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const csrfError = csrfMiddleware(request);
+  if (csrfError) return csrfError;
+
   try {
     const data = await request.json();
     const { action, ...payload } = data;

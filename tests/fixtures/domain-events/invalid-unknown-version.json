@@ -1,0 +1,96 @@
+{
+  "description": "Envelopes carrying a version this build cannot resolve. The interesting case is a plausible-looking newer version from a producer that is ahead of us: the payload may be perfectly valid, and it still must not reach a typed handler.",
+  "expectAll": "rejected",
+  "cases": [
+    {
+      "name": "future major version from a newer producer",
+      "expect": "rejected",
+      "reason": "unknown-version",
+      "event": {
+        "name": "offline-queue-change",
+        "version": "2.0.0",
+        "id": "3b000001-0000-4000-8000-000000000001",
+        "timestamp": "2026-02-11T11:00:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "pending": 2, "urgent": true }
+      }
+    },
+    {
+      "name": "unregistered minor version, which is not automatically readable",
+      "expect": "rejected",
+      "reason": "unknown-version",
+      "event": {
+        "name": "offline-queue-change",
+        "version": "1.1.0",
+        "id": "3b000001-0000-4000-8000-000000000002",
+        "timestamp": "2026-02-11T11:01:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "pending": 2 }
+      }
+    },
+    {
+      "name": "far-future version on a session event",
+      "expect": "rejected",
+      "reason": "unknown-version",
+      "event": {
+        "name": "NETWORK_CHANGED",
+        "version": "9.9.9",
+        "id": "3b000001-0000-4000-8000-000000000003",
+        "timestamp": "2026-02-11T11:02:00.000Z",
+        "source": "tab-8f2a",
+        "payload": { "network": "public" }
+      }
+    },
+    {
+      "name": "version missing entirely",
+      "expect": "rejected",
+      "reason": "malformed-version",
+      "event": {
+        "name": "offline-queue-change",
+        "id": "3b000001-0000-4000-8000-000000000004",
+        "timestamp": "2026-02-11T11:03:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "pending": 2 }
+      }
+    },
+    {
+      "name": "two-component version, which is not the semver the contract requires",
+      "expect": "rejected",
+      "reason": "malformed-version",
+      "event": {
+        "name": "offline-queue-change",
+        "version": "1.0",
+        "id": "3b000001-0000-4000-8000-000000000005",
+        "timestamp": "2026-02-11T11:04:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "pending": 2 }
+      }
+    },
+    {
+      "name": "non-semver version string",
+      "expect": "rejected",
+      "reason": "malformed-version",
+      "event": {
+        "name": "offline-queue-change",
+        "version": "latest",
+        "id": "3b000001-0000-4000-8000-000000000006",
+        "timestamp": "2026-02-11T11:05:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "pending": 2 }
+      }
+    },
+    {
+      "name": "numeric version, which is the classic unquoted-JSON drift",
+      "expect": "rejected",
+      "reason": "malformed-version",
+      "event": {
+        "name": "offline-queue-change",
+        "version": 1,
+        "id": "3b000001-0000-4000-8000-000000000007",
+        "timestamp": "2026-02-11T11:06:00.000Z",
+        "source": "pwa-utils",
+        "payload": { "pending": 2 }
+      }
+    }
+  ]
+}

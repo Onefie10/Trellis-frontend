@@ -17,6 +17,8 @@ export interface BugReport {
   rewardStatus: 'pending' | 'approved' | 'paid' | 'rejected';
   assignedTo?: string;
   resolutionNotes?: string;
+  githubIssueNumber?: number;
+  githubIssueUrl?: string;
 }
 
 export interface BugReportSubmission {
@@ -29,6 +31,7 @@ export interface BugReportSubmission {
   category: 'ui' | 'functionality' | 'performance' | 'security' | 'other';
   screenshots: File[];
   reporterEmail?: string;
+  buildVersion?: string;
 }
 
 export interface RewardCalculation {
@@ -50,6 +53,7 @@ export interface BugReportFormData {
   reporterEmail: string;
   screenshots: File[];
   agreeToTerms: boolean;
+  buildVersion?: string;
 }
 
 export const PRIORITY_REWARDS = {

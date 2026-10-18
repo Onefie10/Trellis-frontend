@@ -10,6 +10,8 @@ A comprehensive referral sharing system for the Trellis platform that enables us
 - **QR Code Generation**: Generate downloadable QR codes for easy sharing
 - **Copy Link**: One-click copy to clipboard functionality
 - **Analytics Tracking**: Comprehensive tracking of clicks, signups, and conversions
+- **Vanity Referral Links**: Register clean `trellis.market/r/<slug>` aliases for specific marketplace agents
+- **Click Analytics**: Referrer source, device type and conversion status per link, with CTR / conversion metrics
 - **Reward Management**: Track and claim earned rewards
 
 ### Components
@@ -109,6 +111,13 @@ The feature expects the following API endpoints:
 - `GET /analytics/referral/:code` - Get referral analytics
 - `GET /analytics/user/:userId/summary` - Get user analytics summary
 
+### Vanity Link & Click Analytics Endpoints
+- `POST /api/affiliates/vanity-slugs` - Register a vanity alias (`walletAddress`, `slug`, `targetAgentId`)
+- `GET /api/affiliates/vanity-slugs?wallet=:address` - List a wallet's aliases
+- `GET /api/affiliates/vanity-slugs?slug=:slug` - Check whether a slug is still available
+- `POST /api/affiliates/referral-clicks` - Record a click or link view against an alias
+- `GET /api/affiliates/referral-clicks?wallet=:address&days=30` - CTR / conversion metrics for the wallet
+
 ## Configuration
 
 ### Environment Variables
@@ -129,7 +138,8 @@ npm test -- features/referral-sharing
 
 ### Test Coverage
 - Referral service functionality
-- Social share service functionality
+- Vanity slug validation, collision handling and link building (`tests/vanitySlug.test.ts`)
+- Click analytics recording and CTR / conversion derivation (`tests/analyticsService.test.ts`)
 - Component interactions
 - Error handling
 - Edge cases
@@ -141,6 +151,13 @@ The system tracks the following events:
 - **Signup**: When a new user signs up with a referral code
 - **Conversion**: When a referred user completes a key action
 - **Source**: The platform/method used for sharing (twitter, facebook, copy, etc.)
+
+Each vanity-link click event also records the **referrer source** (twitter,
+facebook, linkedin, whatsapp, telegram, google, direct or other), the **device
+type** (mobile, tablet or desktop) and the **conversion status** (none, signup
+or converted). These three fields feed the CTR and conversion chart on the
+affiliate dashboard. Link views are recorded as impressions, so CTR is
+`clicks / impressions` — it is 0 until impressions exist rather than guessed.
 
 ## Security Considerations
 
